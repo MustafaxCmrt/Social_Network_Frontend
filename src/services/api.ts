@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5265/api';
+const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 interface RequestOptions extends RequestInit {
   token?: string;
@@ -18,6 +18,34 @@ export const api = {
         'Content-Type': 'application/json',
         ...options.headers,
       },
+    });
+  },
+
+  put: async <T>(endpoint: string, body: any, options: RequestOptions = {}): Promise<T> => {
+    return request<T>(endpoint, {
+      ...options,
+      method: 'PUT',
+      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+  },
+
+  delete: async <T>(endpoint: string, options: RequestOptions = {}): Promise<T> => {
+    return request<T>(endpoint, { ...options, method: 'DELETE' });
+  },
+
+  upload: async <T>(endpoint: string, file: File, options: RequestOptions = {}): Promise<T> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return request<T>(endpoint, {
+      ...options,
+      method: 'POST',
+      body: formData,
+      // Content-Type header must be undefined for FormData, browser sets it with boundary
     });
   },
 };

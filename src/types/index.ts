@@ -5,6 +5,10 @@ export interface User {
     username: string;
     email: string;
     role: string;
+    isActive: boolean;
+    profileImg?: string;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface AuthResponse {
@@ -49,3 +53,7 @@ export interface ResetPasswordRequest {
     confirmPassword: string;
 }
 
+
+export interface ResendVerificationRequest {
+    email: string;
+}

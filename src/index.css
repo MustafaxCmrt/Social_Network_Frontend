@@ -2,32 +2,39 @@
 
 :root {
   --bg-primary: #ffffff;
+  --bg-secondary: #f3f4f6;
+  --bg-card: #ffffff;
   --text-primary: #1a1a1a;
+  --text-secondary: #4b5563;
   --accent-color: #3b82f6;
-  --navbar-bg: rgba(255, 255, 255, 0.1);
-  --navbar-border: rgba(255, 255, 255, 0.2);
+  --navbar-bg: #ffffff;
+  --navbar-border: #e5e7eb;
+  --input-bg: #f9fafb;
+  --input-border: #d1d5db;
 }
 
 .dark {
-  --bg-primary: #0a0a0a;
+  --bg-primary: #000000;
+  --bg-secondary: #111111;
+  --bg-card: #0a0a0a;
   --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
   --accent-color: #60a5fa;
-  --navbar-bg: rgba(0, 0, 0, 0.3);
-  --navbar-border: rgba(255, 255, 255, 0.1);
+  --navbar-bg: #000000;
+  --navbar-border: #333333;
+  --input-bg: #111111;
+  --input-border: #333333;
 }
 
 body {
   margin: 0;
   padding: 0;
-  width: 100vw;
-  height: 100vh;
-  overflow: auto;
-  /* Scroll enabled */
+  min-height: 100vh;
+  overflow-x: hidden;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: #000000;
-  /* Force black globally */
+  background-color: var(--bg-primary);
   color: var(--text-primary);
-  /* transition: background-color 0.3s ease, color 0.3s ease; Removed transition to prevent white flash */
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 button {

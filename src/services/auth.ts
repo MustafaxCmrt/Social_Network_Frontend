@@ -1,4 +1,4 @@
-import { api } from './api';
+// import { api } from './api';
 
 // Types - Backend'den gelecek veriye göre güncelleyeceğiz
 export interface User {
@@ -20,8 +20,8 @@ export const authService = {
     console.log('Login attempt with:', credentials);
     // Mock response for now
     return {
-        user: { id: '1', email: credentials.email, username: 'demo' },
-        token: 'mock-jwt-token'
+      user: { id: '1', email: credentials.email, username: 'demo' },
+      token: 'mock-jwt-token'
     };
   },
 
@@ -30,8 +30,8 @@ export const authService = {
     // ÖRNEK: return api.post<AuthResponse>('/auth/register', credentials);
     console.log('Register attempt with:', credentials);
     return {
-        user: { id: '2', email: credentials.email, username: credentials.username },
-        token: 'mock-jwt-token'
+      user: { id: '2', email: credentials.email, username: credentials.username },
+      token: 'mock-jwt-token'
     };
   }
 };
