@@ -1,0 +1,156 @@
+.auth-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: calc(100vh - 70px);
+    background-color: #000000;
+    padding: 2rem;
+    margin-top: 70px;
+}
+
+.auth-card {
+    background: #0a0a0a;
+    padding: 2.5rem;
+    border-radius: 12px;
+    border: 1px solid #222;
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+}
+
+.auth-title {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 0.5rem;
+}
+
+.auth-subtitle {
+    color: #666;
+    margin-bottom: 2rem;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    text-align: left;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-group label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #cccccc;
+}
+
+.form-group input {
+    padding: 0.75rem;
+    border: 1px solid #333;
+    background-color: #111;
+    color: white;
+    border-radius: 6px;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+    border-color: #ffffff;
+}
+
+.form-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.forgot-password {
+    font-size: 0.875rem;
+    color: #888;
+    text-decoration: none;
+}
+
+.forgot-password:hover {
+    color: #fff;
+    text-decoration: underline;
+}
+
+.btn-primary {
+    background-color: #ffffff;
+    color: black;
+    padding: 0.75rem;
+    border-radius: 6px;
+    font-weight: 600;
+    margin-top: 0.5rem;
+    transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+    background-color: #e0e0e0;
+}
+
+.auth-divider {
+    margin: 1.5rem 0;
+    display: flex;
+    align-items: center;
+    color: #444;
+    font-size: 0.875rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #222;
+}
+
+.auth-divider span {
+    padding: 0 1rem;
+}
+
+.btn-social {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #333;
+    border-radius: 6px;
+    background: #111;
+    font-weight: 500;
+    color: #cccccc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    /* Increased gap for icon */
+    transition: background-color 0.2s;
+}
+
+.google-icon {
+    display: block;
+    /* Fix for SVG alignment */
+}
+
+.btn-social:hover {
+    background-color: #222;
+}
+
+.auth-redirect {
+    margin-top: 1.5rem;
+    font-size: 0.875rem;
+    color: #666;
+}
+
+.auth-redirect a {
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 600;
+    margin-left: 0.25rem;
+}
+
+.auth-redirect a:hover {
+    text-decoration: underline;
+}
