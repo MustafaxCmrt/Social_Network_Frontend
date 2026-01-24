@@ -42,3 +42,22 @@ export interface PostFilterParams {
     page?: number;
     pageSize?: number;
 }
+
+export interface MarkSolutionDto {
+    threadId: number;
+    postId: number;
+}
+
+export interface UpvoteResponse {
+    postId: number;
+    isUpvoted: boolean;
+    totalUpvotes: number;
+    message?: string;
+}
+
+export interface VoteStatusResponse {
+    postId: number;
+    isUpvoted: boolean;
+    totalUpvotes: number;
+}
+
