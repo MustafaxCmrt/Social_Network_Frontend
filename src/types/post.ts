@@ -1,3 +1,13 @@
+// Ortak User objesi (API'den gelen)
+export interface PostUser {
+    id: number;
+    firstName: string;
+    lastName: string;
+    username: string;
+    profileImg: string | null;
+    fullName: string;
+}
+
 export interface Post {
     id: number;
     threadId: number;
@@ -10,7 +20,9 @@ export interface Post {
     replyCount?: number;
     createdAt: string;
     updatedAt: string;
-    // Backend'den gelip gelmeyeceğini kontrol etmenizi öneririm, mock için opsiyonel
+    // API'den gelen user objesi
+    user?: PostUser;
+    // Eski uyumluluk için (deprecated, user kullanılmalı)
     author?: {
         username: string;
         avatar: string;
@@ -60,4 +72,3 @@ export interface VoteStatusResponse {
     isUpvoted: boolean;
     totalUpvotes: number;
 }
-

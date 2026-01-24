@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5265/api';
 
 interface RequestOptions extends RequestInit {
   token?: string;
@@ -35,6 +35,18 @@ export const api = {
 
   delete: async <T>(endpoint: string, options: RequestOptions = {}): Promise<T> => {
     return request<T>(endpoint, { ...options, method: 'DELETE' });
+  },
+
+  patch: async <T>(endpoint: string, body: any = {}, options: RequestOptions = {}): Promise<T> => {
+    return request<T>(endpoint, {
+      ...options,
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
   },
 
   upload: async <T>(endpoint: string, file: File, options: RequestOptions = {}): Promise<T> => {

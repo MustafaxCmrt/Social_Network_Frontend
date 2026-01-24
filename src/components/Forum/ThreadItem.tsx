@@ -13,11 +13,11 @@ interface ThreadItemProps {
 export const ThreadItem: React.FC<ThreadItemProps> = ({ thread, onEdit, onDelete }) => {
     const navigate = useNavigate();
 
-    // Statik veriler veya fallback değerler
-    const authorName = thread.author?.username || 'Kullanıcı';
-    const authorAvatar = thread.author?.avatar || `https://ui-avatars.com/api/?name=${authorName}&background=random`;
+    // API'den gelen user ve category bilgileri
+    const authorName = thread.user?.username || thread.author?.username || 'Kullanıcı';
+    const authorAvatar = thread.user?.profileImg || thread.author?.avatar || `https://ui-avatars.com/api/?name=${authorName}&background=random`;
     const replyCount = thread.replyCount || 0;
-    const categoryName = thread.categoryName || 'Genel';
+    const categoryName = thread.category?.title || thread.categoryName || 'Genel';
     const tags = thread.tags || [];
 
     const formatDate = (dateString: string) => {

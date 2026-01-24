@@ -1,3 +1,20 @@
+// Ortak User objesi (API'den gelen)
+export interface ThreadUser {
+    id: number;
+    firstName: string;
+    lastName: string;
+    username: string;
+    profileImg: string | null;
+    fullName: string;
+}
+
+// Ortak Category objesi (API'den gelen)
+export interface ThreadCategory {
+    id: number;
+    title: string;
+    slug: string;
+}
+
 export interface Thread {
     id: number;
     title: string;
@@ -8,8 +25,10 @@ export interface Thread {
     categoryId: number;
     createdAt: string;
     updatedAt: string;
-    // Backend'den gelip gelmediği kontrol edilecek alanlar, mock ile uyum için opsiyonel bırakabiliriz veya frontend'de birleştirebiliriz
-    // Şimdilik backend response'a sadık kalıyoruz
+    // API'den gelen user ve category objeleri
+    user?: ThreadUser;
+    category?: ThreadCategory;
+    // Eski uyumluluk için (deprecated, user kullanılmalı)
     author?: {
         username: string;
         avatar: string;

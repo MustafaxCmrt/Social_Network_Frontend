@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import '../styles/Auth.css';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { authService } from '../services/authService';
 
 const Register: React.FC = () => {
-    const navigate = useNavigate();
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -32,7 +31,7 @@ const Register: React.FC = () => {
         const nameRegex = /^[a-zA-ZğüşıöçĞÜŞİÖÇ ]+$/;
         const usernameRegex = /^[a-zA-Z0-9_]+$/;
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{8,100}$/;
+        const passwordRegex = /^(?=.*[a-zçğışöü])(?=.*[A-ZÇĞİÖŞÜ])(?=.*\d)(?=.*[^a-zA-Z0-9çğışöüÇĞİÖŞÜ]).{8,100}$/;
 
         if (!formData.firstName || !nameRegex.test(formData.firstName) || formData.firstName.length < 2) {
             setError('Ad sadece harf içermeli ve en az 2 karakter olmalıdır.');
@@ -62,6 +61,8 @@ const Register: React.FC = () => {
         return true;
     };
 
+    const [success, setSuccess] = useState(false);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -72,14 +73,49 @@ const Register: React.FC = () => {
 
         try {
             await authService.register(formData);
-            // On success, redirect to login
-            navigate('/login');
+            setSuccess(true);
         } catch (err: any) {
             setError(err.message || 'Kayıt olurken bir hata oluştu');
         } finally {
             setLoading(false);
         }
     };
+
+    if (success) {
+        return (
+            <div className="auth-container">
+                <div className="auth-card">
+                    <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                        <div style={{
+                            width: '64px',
+                            height: '64px',
+                            background: 'rgba(16, 185, 129, 0.1)',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 1rem auto'
+                        }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                            </svg>
+                        </div>
+                        <h2 className="auth-title">Kayıt Başarılı!</h2>
+                        <p className="auth-subtitle" style={{ fontSize: '1rem', color: '#4b5563', lineHeight: '1.5' }}>
+                            Hesabınız oluşturuldu. Lütfen email adresinize gönderilen doğrulama linkine tıklayarak hesabınızı aktif edin.
+                        </p>
+                    </div>
+
+                    <div className="auth-divider"></div>
+
+                    <p className="auth-redirect" style={{ marginTop: '1rem' }}>
+                        Email doğruladıktan sonra <Link to="/login" style={{ fontWeight: '600' }}>Giriş Yap</Link>
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="auth-container">

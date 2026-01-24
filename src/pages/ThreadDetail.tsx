@@ -6,7 +6,8 @@ import type { Thread } from '../types/thread';
 import type { Post } from '../types/post';
 import {
     Pin, MessageSquare, Eye, ArrowLeft, Send, User, Calendar,
-    ThumbsUp, CheckCircle, Image, Reply, ChevronDown, ChevronUp, X
+    ThumbsUp, CheckCircle, Image, Reply, ChevronDown, ChevronUp, X,
+    Edit2, Trash2
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import '../styles/Home.css';
@@ -38,13 +39,21 @@ const ThreadDetail: React.FC = () => {
     const [postReplies, setPostReplies] = useState<Map<number, Post[]>>(new Map());
     const [loadingReplies, setLoadingReplies] = useState<Set<number>>(new Set());
 
+    // Edit/Delete state
+    const [editingPostId, setEditingPostId] = useState<number | null>(null);
+    const [editContent, setEditContent] = useState('');
+    const [deletingPostId, setDeletingPostId] = useState<number | null>(null);
+
+    // TODO: Current user ID - bunu AuthContext'ten al
+    const currentUserId = 4; // Geçici olarak sabit
+
     const fetchThreadData = async () => {
         if (!id) return;
         setLoading(true);
         try {
             const [threadData, postResponse] = await Promise.all([
                 threadService.getById(Number(id)),
-                postService.getAllByThreadId(Number(id), { page: 1, pageSize: 50 })
+                postService.getAllByThreadId(Number(id), { page: 1, pageSize: 20 })
             ]);
 
             setThread(threadData);
@@ -69,6 +78,13 @@ const ThreadDetail: React.FC = () => {
     useEffect(() => {
         fetchThreadData();
         window.scrollTo(0, 0);
+
+        // Görüntülenme sayısını artır (ayrı endpoint)
+        if (id) {
+            threadService.incrementViewCount(Number(id)).catch(err => {
+                console.error('ViewCount artırılamadı:', err);
+            });
+        }
     }, [id]);
 
     const handleBack = () => {
@@ -103,26 +119,23 @@ const ThreadDetail: React.FC = () => {
 
         setSubmitting(true);
         try {
-            let imageUrl: string | undefined;
-
-            // Upload image if selected
-            if (selectedImage) {
-                imageUrl = await postService.uploadImage(selectedImage);
-            }
-
-            await postService.create({
-                threadId: Number(id),
-                content: newPostContent,
-                img: imageUrl,
-                parentPostId: parentPostId || undefined
-            });
+            // Tek istekle içerik ve görsel gönder
+            await postService.createWithImage(
+                Number(id),
+                newPostContent,
+                selectedImage || undefined,
+                parentPostId
+            );
 
             setNewPostContent('');
             removeImage();
             setReplyingToPostId(null);
 
+            // Başarılı mesajı göster
+            toast.success('Başarılı', parentPostId ? 'Yanıt gönderildi.' : 'Yorum gönderildi.');
+
             // Refresh posts
-            const postResponse = await postService.getAllByThreadId(Number(id), { page: 1, pageSize: 50 });
+            const postResponse = await postService.getAllByThreadId(Number(id), { page: 1, pageSize: 20 });
             setPosts(postResponse.items);
 
             // Initialize upvote counts for new posts
@@ -147,23 +160,31 @@ const ThreadDetail: React.FC = () => {
         }
     };
 
-    // Upvote handling
+    // Upvote handling (toggle)
     const handleUpvote = async (postId: number) => {
         try {
-            const isUpvoted = upvotedPosts.has(postId);
+            // Backend toggle olarak çalışıyor - her çağrıda beğeni ekler veya kaldırır
+            const response = await postService.upvote(postId);
 
-            if (isUpvoted) {
-                const response = await postService.removeUpvote(postId);
+            // Backend'den dönen isUpvoted değerine göre state'i güncelle
+            if (response.isUpvoted) {
+                setUpvotedPosts(prev => new Set(prev).add(postId));
+            } else {
                 setUpvotedPosts(prev => {
                     const newSet = new Set(prev);
                     newSet.delete(postId);
                     return newSet;
                 });
-                setPostUpvotes(prev => new Map(prev).set(postId, response.totalUpvotes));
-            } else {
-                const response = await postService.upvote(postId);
-                setUpvotedPosts(prev => new Set(prev).add(postId));
-                setPostUpvotes(prev => new Map(prev).set(postId, response.totalUpvotes));
+            }
+            setPostUpvotes(prev => new Map(prev).set(postId, response.totalUpvotes));
+
+            // Backend'den gelen mesajı göster
+            if (response.message) {
+                if (response.isUpvoted) {
+                    toast.success('Beğenildi', response.message);
+                } else {
+                    toast.info('Bilgi', response.message);
+                }
             }
         } catch (err) {
             console.error(err);
@@ -195,6 +216,30 @@ const ThreadDetail: React.FC = () => {
         } catch (err) {
             console.error(err);
             toast.error('Hata', 'Çözüm işaretleme başarısız oldu.');
+        }
+    };
+
+    // Çözüm işaretini kaldır
+    const handleUnmarkSolution = async () => {
+        if (!thread || !id) return;
+
+        try {
+            const response = await postService.unmarkSolution(Number(id));
+
+            // Update thread status
+            setThread(prev => prev ? { ...prev, isSolved: false } : null);
+
+            // Update posts to remove solution badge
+            setPosts(prev => prev.map(post => ({
+                ...post,
+                isSolution: false
+            })));
+
+            toast.success('Çözüm Kaldırıldı', response.message);
+
+        } catch (err) {
+            console.error(err);
+            toast.error('Hata', 'Çözüm kaldırma başarısız oldu.');
         }
     };
 
@@ -240,6 +285,59 @@ const ThreadDetail: React.FC = () => {
         removeImage();
     };
 
+    // Start editing a post
+    const startEdit = (post: Post) => {
+        setEditingPostId(post.id);
+        setEditContent(post.content);
+    };
+
+    const cancelEdit = () => {
+        setEditingPostId(null);
+        setEditContent('');
+    };
+
+    // Update post
+    const handleUpdatePost = async () => {
+        if (!editingPostId || !editContent.trim()) return;
+
+        try {
+            await postService.update({
+                id: editingPostId,
+                content: editContent,
+                img: undefined // Görseli değiştirmiyoruz şimdilik
+            });
+
+            // Update local state
+            setPosts(prev => prev.map(post =>
+                post.id === editingPostId
+                    ? { ...post, content: editContent }
+                    : post
+            ));
+
+            toast.success('Başarılı', 'Yorum güncellendi.');
+            cancelEdit();
+        } catch (err) {
+            console.error(err);
+            toast.error('Hata', 'Güncelleme başarısız oldu.');
+        }
+    };
+
+    // Delete post
+    const handleDeletePost = async (postId: number) => {
+        try {
+            await postService.delete(postId);
+
+            // Remove from local state
+            setPosts(prev => prev.filter(post => post.id !== postId));
+
+            toast.success('Başarılı', 'Yorum silindi.');
+            setDeletingPostId(null);
+        } catch (err) {
+            console.error(err);
+            toast.error('Hata', 'Silme başarısız oldu.');
+        }
+    };
+
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('tr-TR', {
             day: 'numeric',
@@ -270,7 +368,6 @@ const ThreadDetail: React.FC = () => {
     }
 
     // TODO: Replace with actual logged-in user ID from auth context
-    const currentUserId = 1;
     const isThreadOwner = thread.userId === currentUserId;
 
     const mainPosts = posts.filter(p => !p.parentPostId);
@@ -293,8 +390,8 @@ const ThreadDetail: React.FC = () => {
                         <div className="thread-detail-header">
                             <div className="thread-author-section">
                                 <img
-                                    src={thread.author?.avatar || `https://ui-avatars.com/api/?name=${thread.author?.username || 'K'}&background=random`}
-                                    alt={thread.author?.username}
+                                    src={thread.user?.profileImg || `https://ui-avatars.com/api/?name=${thread.user?.username || 'K'}&background=random`}
+                                    alt={thread.user?.username}
                                     className="detail-avatar"
                                 />
                                 <div className="thread-meta-info">
@@ -313,11 +410,11 @@ const ThreadDetail: React.FC = () => {
                                             </span>
                                         )}
                                         <span className="thread-badge category">
-                                            {thread.categoryName || 'Genel'}
+                                            {thread.category?.title || 'Genel'}
                                         </span>
                                         <span className="meta-item">
                                             <User size={14} />
-                                            @{thread.author?.username || 'Kullanıcı'}
+                                            @{thread.user?.username || 'Kullanıcı'}
                                         </span>
                                         <span className="meta-item">
                                             <Calendar size={14} />
@@ -445,14 +542,14 @@ const ThreadDetail: React.FC = () => {
                                         {/* Comment Header */}
                                         <div className="comment-header">
                                             <img
-                                                src={post.author?.avatar || `https://ui-avatars.com/api/?name=${post.author?.username || 'U'}&background=random&size=32`}
-                                                alt={post.author?.username}
+                                                src={post.user?.profileImg || `https://ui-avatars.com/api/?name=${post.user?.username || 'U'}&background=random&size=32`}
+                                                alt={post.user?.username}
                                                 className="comment-avatar"
                                             />
                                             <div className="comment-meta">
                                                 <span className="comment-author">
-                                                    @{post.author?.username || 'Kullanıcı'}
-                                                    {post.author?.username === thread.author?.username && (
+                                                    @{post.user?.username || 'Kullanıcı'}
+                                                    {post.userId === thread.userId && (
                                                         <span className="op-badge">OP</span>
                                                     )}
                                                 </span>
@@ -494,13 +591,25 @@ const ThreadDetail: React.FC = () => {
                                                 Yanıtla
                                             </button>
 
+                                            {/* Çözüm İşaretle - thread sahibi için, çözülmemişse */}
                                             {isThreadOwner && !thread.isSolved && (
                                                 <button
                                                     className="action-btn solution"
                                                     onClick={() => handleMarkSolution(post.id)}
                                                 >
                                                     <CheckCircle size={14} />
-                                                    Çözüm
+                                                    Çözüm Olarak İşaretle
+                                                </button>
+                                            )}
+
+                                            {/* Çözümü Kaldır - thread sahibi için, bu post çözüm ise */}
+                                            {isThreadOwner && post.isSolution && (
+                                                <button
+                                                    className="action-btn delete"
+                                                    onClick={handleUnmarkSolution}
+                                                >
+                                                    <X size={14} />
+                                                    Çözümü Kaldır
                                                 </button>
                                             )}
 
@@ -524,13 +633,86 @@ const ThreadDetail: React.FC = () => {
                                                     )}
                                                 </button>
                                             )}
+
+                                            {/* Edit/Delete - sadece yorum sahibine görünür */}
+                                            {post.userId === currentUserId && (
+                                                <>
+                                                    <button
+                                                        className="action-btn edit"
+                                                        onClick={() => startEdit(post)}
+                                                    >
+                                                        <Edit2 size={14} />
+                                                        Düzenle
+                                                    </button>
+                                                    <button
+                                                        className="action-btn delete"
+                                                        onClick={() => setDeletingPostId(post.id)}
+                                                    >
+                                                        <Trash2 size={14} />
+                                                        Sil
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
+
+                                        {/* Edit Form */}
+                                        {editingPostId === post.id && (
+                                            <div className="inline-reply-form">
+                                                <div className="inline-reply-header">
+                                                    <span>Yorumu Düzenle</span>
+                                                    <button className="cancel-btn" onClick={cancelEdit}>
+                                                        <X size={16} />
+                                                    </button>
+                                                </div>
+                                                <textarea
+                                                    value={editContent}
+                                                    onChange={(e) => setEditContent(e.target.value)}
+                                                    className="inline-reply-textarea"
+                                                    rows={3}
+                                                    autoFocus
+                                                />
+                                                <div className="inline-reply-actions">
+                                                    <button
+                                                        onClick={handleUpdatePost}
+                                                        disabled={!editContent.trim()}
+                                                        className="send-reply-btn"
+                                                    >
+                                                        <Send size={14} /> Kaydet
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Delete Confirmation */}
+                                        {deletingPostId === post.id && (
+                                            <div className="inline-reply-form" style={{ borderColor: '#ef4444' }}>
+                                                <div className="inline-reply-header">
+                                                    <span style={{ color: '#ef4444' }}>Bu yorumu silmek istediğinize emin misiniz?</span>
+                                                </div>
+                                                <div className="inline-reply-actions">
+                                                    <button
+                                                        onClick={() => setDeletingPostId(null)}
+                                                        className="action-btn"
+                                                        style={{ marginRight: '0.5rem' }}
+                                                    >
+                                                        İptal
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeletePost(post.id)}
+                                                        className="send-reply-btn"
+                                                        style={{ background: '#ef4444' }}
+                                                    >
+                                                        <Trash2 size={14} /> Sil
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         {/* Inline Reply Form */}
                                         {replyingToPostId === post.id && (
                                             <div className="inline-reply-form">
                                                 <div className="inline-reply-header">
-                                                    <span>@{post.author?.username} kullanıcısına yanıt</span>
+                                                    <span>@{post.user?.username || 'Kullanıcı'} kullanıcısına yanıt</span>
                                                     <button className="cancel-btn" onClick={cancelReply}>
                                                         <X size={16} />
                                                     </button>
@@ -581,13 +763,13 @@ const ThreadDetail: React.FC = () => {
                                                 {postReplies.get(post.id)!.map(reply => (
                                                     <div key={reply.id} className="nested-reply">
                                                         <img
-                                                            src={reply.author?.avatar || `https://ui-avatars.com/api/?name=${reply.author?.username || 'U'}&background=random&size=24`}
-                                                            alt={reply.author?.username}
+                                                            src={reply.user?.profileImg || `https://ui-avatars.com/api/?name=${reply.user?.username || 'U'}&background=random&size=24`}
+                                                            alt={reply.user?.username}
                                                             className="nested-reply-avatar"
                                                         />
                                                         <div className="nested-reply-content">
                                                             <div className="nested-reply-meta">
-                                                                <span className="nested-reply-author">@{reply.author?.username}</span>
+                                                                <span className="nested-reply-author">@{reply.user?.username || 'Kullanıcı'}</span>
                                                                 <span className="nested-reply-time">{formatDate(reply.createdAt)}</span>
                                                             </div>
                                                             <p>{reply.content}</p>

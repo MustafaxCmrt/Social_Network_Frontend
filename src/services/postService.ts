@@ -1,5 +1,6 @@
 import { api } from './api';
 import type {
+    Post,
     PostResponse,
     CreatePostDto,
     UpdatePostDto,
@@ -24,6 +25,40 @@ export const postService = {
         await api.post('/Post/create', data);
     },
 
+    // Görsel ile birlikte yorum oluştur (multipart/form-data)
+    createWithImage: async (
+        threadId: number,
+        content: string,
+        image?: File,
+        parentPostId?: number
+    ): Promise<Post> => {
+        const formData = new FormData();
+        formData.append('threadId', threadId.toString());
+        formData.append('content', content);
+        if (parentPostId) {
+            formData.append('parentPostId', parentPostId.toString());
+        }
+        if (image) {
+            formData.append('image', image);
+        }
+
+        const token = localStorage.getItem('accessToken');
+        const response = await fetch(`${API_BASE_URL}/Post/create-with-image`, {
+            method: 'POST',
+            headers: {
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Yorum oluşturulurken bir hata oluştu.');
+        }
+
+        return await response.json();
+    },
+
     update: async (data: UpdatePostDto): Promise<void> => {
         await api.put('/Post/update', data);
     },
@@ -35,6 +70,11 @@ export const postService = {
     // Yorumu çözüm olarak işaretle
     markSolution: async (data: MarkSolutionDto): Promise<void> => {
         await api.post('/Post/markSolution', data);
+    },
+
+    // Çözüm işaretini kaldır
+    unmarkSolution: async (threadId: number): Promise<{ message: string }> => {
+        return await api.delete<{ message: string }>(`/Post/unmarkSolution/${threadId}`);
     },
 
     // Görsel yükle (multipart/form-data)
@@ -59,14 +99,14 @@ export const postService = {
         return await response.text();
     },
 
-    // Yorumu beğen
+    // Yorumu beğen / beğeniyi kaldır (toggle) - PATCH metodu
     upvote: async (postId: number): Promise<UpvoteResponse> => {
-        return await api.post<UpvoteResponse>(`/Post/${postId}/upvote`, {});
+        return await api.patch<UpvoteResponse>(`/Post/${postId}/upvote`);
     },
 
-    // Beğeniyi kaldır
+    // Beğeniyi kaldır (aynı endpoint, toggle olarak çalışıyor)
     removeUpvote: async (postId: number): Promise<UpvoteResponse> => {
-        return await api.delete<UpvoteResponse>(`/Post/${postId}/upvote`);
+        return await api.patch<UpvoteResponse>(`/Post/${postId}/upvote`);
     },
 
     // Oy durumunu kontrol et

@@ -9,6 +9,7 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ResendVerification from './pages/ResendVerification';
+import VerifyEmail from './pages/VerifyEmail';
 import Profile from './pages/Profile';
 import ThreadDetail from './pages/ThreadDetail';
 import ToastContainer from './components/Toast';
@@ -29,6 +30,7 @@ function App() {
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/resend-verification" element={<ResendVerification />} />
+                <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/thread/:id" element={<ThreadDetail />} />
               </Routes>

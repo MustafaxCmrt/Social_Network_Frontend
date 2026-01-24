@@ -18,6 +18,10 @@ export const authService = {
         return api.post<void>('/Auth/resend-verification-email', data);
     },
 
+    verifyEmail: async (token: string): Promise<{ message: string }> => {
+        return api.get<{ message: string }>(`/Auth/verify-email?token=${token}`);
+    },
+
     forgotPassword: async (data: ForgotPasswordRequest): Promise<void> => {
         // Backend returns 200 OK or 400 Bad Request
         return api.post<void>('/Auth/forgot-password', data);

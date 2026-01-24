@@ -31,5 +31,10 @@ export const threadService = {
 
     delete: async (id: number): Promise<void> => {
         await api.delete(`/Thread/delete/${id}`);
-    }
+    },
+
+    // Görüntülenme sayısını artır
+    incrementViewCount: async (id: number): Promise<{ message: string }> => {
+        return await api.post<{ message: string }>(`/Thread/${id}/view`, {});
+    },
 };
