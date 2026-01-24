@@ -9,6 +9,7 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ResendVerification from './pages/ResendVerification';
 import Profile from './pages/Profile';
+import ThreadDetail from './pages/ThreadDetail';
 import './App.css';
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/resend-verification" element={<ResendVerification />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/thread/:id" element={<ThreadDetail />} />
             </Routes>
           </div>
         </Router>

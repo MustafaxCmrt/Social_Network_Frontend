@@ -1,31 +1,46 @@
 import React from 'react';
-import type { Category } from '../../data/mockData';
+import { MessageSquare, Folder, Edit2, Trash2 } from 'lucide-react';
+import type { Category } from '../../types/category';
 
 interface CategoryCardProps {
     category: Category;
+    onEdit: (category: Category) => void;
+    onDelete: (category: Category) => void;
 }
 
-export const CategoryCard: React.FC<CategoryCardProps> = ({ category }) => {
+export const CategoryCard: React.FC<CategoryCardProps> = ({ category, onEdit, onDelete }) => {
     return (
-        <div className="category-card">
-            <div className="category-header">
-                <div className={`category-icon ${category.color}`}>
-                    {category.icon}
-                </div>
-                <div className="category-info">
-                    <h3 className="category-title">{category.title}</h3>
-                    <p className="category-description">{category.description}</p>
-                </div>
+        <div className="category-card group">
+            <div className="category-icon">
+                <Folder size={24} />
             </div>
-            <div className="category-stats">
-                <span className="stat-item">
-                    <svg className="stat-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path></svg>
-                    {category.topicCount} Konu
-                </span>
-                <span className="stat-item">
-                    <svg className="stat-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
-                    {category.postCount} Mesaj
-                </span>
+            <div className="category-content">
+                <div className="flex justify-between items-start">
+                    <h3>{category.title}</h3>
+                    <div className="category-actions">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onEdit(category); }}
+                            className="action-btn edit-btn"
+                            title="Düzenle"
+                        >
+                            <Edit2 size={16} />
+                        </button>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(category); }}
+                            className="action-btn delete-btn"
+                            title="Sil"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                    </div>
+                </div>
+                {category.description && <p>{category.description}</p>}
+                <div className="category-stats">
+                    <div className="stat-item">
+                        <MessageSquare size={14} />
+                        <span>{category.threadCount} Konu</span>
+                    </div>
+                </div>
             </div>
         </div>
     );
