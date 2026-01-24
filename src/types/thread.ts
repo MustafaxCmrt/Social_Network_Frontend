@@ -37,6 +37,9 @@ export interface Thread {
     replyCount?: number;
     tags?: string[];
     isPinned?: boolean;
+    // Search specific fields
+    username?: string;
+    postCount?: number;
 }
 
 export interface ThreadResponse {

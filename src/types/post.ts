@@ -27,6 +27,9 @@ export interface Post {
         username: string;
         avatar: string;
     };
+    // Search specific fields
+    username?: string;
+    threadTitle?: string;
 }
 
 export interface PostResponse {

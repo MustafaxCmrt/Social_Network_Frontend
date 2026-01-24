@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import '../styles/Home.css';
 import { CategoryCard, ThreadItem } from './Forum';
 import type { Category, CreateCategoryDto, UpdateCategoryDto } from '../types/category';
@@ -156,20 +156,14 @@ const Home: React.FC = () => {
             />
 
             {/* Forum Hero Section */}
+            {/* Forum Hero Section */}
             <section className="forum-hero">
                 <div className="forum-hero-content">
                     <h1 className="forum-title">Topluluk Forumu</h1>
                     <p className="forum-subtitle">
                         Bilgi paylaşın, sorular sorun ve toplulukla etkileşime geçin.
                     </p>
-                    <div className="forum-search">
-                        <Search className="search-icon" size={20} />
-                        <input
-                            type="text"
-                            placeholder="Konu veya mesaj ara..."
-                            className="search-input"
-                        />
-                    </div>
+
                 </div>
             </section>
 
