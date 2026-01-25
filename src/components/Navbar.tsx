@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { Sun, Moon, Menu, X, LogOut, Settings, ChevronDown, Search, Bell, CheckCheck, Trash2 } from 'lucide-react';
+import { Sun, Moon, Menu, X, LogOut, Settings, ChevronDown, Search, Bell, CheckCheck, Trash2, Shield } from 'lucide-react';
 import { notificationService } from '../services/notificationService';
 import type { Notification } from '../types/notification';
 import '../styles/Navbar.css';
@@ -447,6 +447,30 @@ const Navbar: React.FC = () => {
                                                     <span>Profil Ayarları</span>
                                                 </Link>
 
+                                                {/* Admin Panel - Sadece admin kullanıcılar için */}
+                                                {(user.isAdmin || user.role === 'Admin') && (
+                                                    <Link
+                                                        to="/admin"
+                                                        onClick={() => setIsProfileMenuOpen(false)}
+                                                        style={{
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '0.75rem',
+                                                            padding: '0.75rem 1rem',
+                                                            color: '#8b5cf6',
+                                                            textDecoration: 'none',
+                                                            borderRadius: '8px',
+                                                            transition: 'background 0.2s',
+                                                            background: 'rgba(139, 92, 246, 0.1)'
+                                                        }}
+                                                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(139, 92, 246, 0.2)'}
+                                                        onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(139, 92, 246, 0.1)'}
+                                                    >
+                                                        <Shield size={18} />
+                                                        <span>Admin Panel</span>
+                                                    </Link>
+                                                )}
+
                                                 <button
                                                     onClick={() => {
                                                         logout();
@@ -520,6 +544,27 @@ const Navbar: React.FC = () => {
                                 <Link to="/profile" className="btn-login mobile-btn" style={{ marginBottom: '0.5rem', textAlign: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
                                     Profil Ayarları
                                 </Link>
+                                {/* Admin Panel - Mobil */}
+                                {(user.isAdmin || user.role === 'Admin') && (
+                                    <Link
+                                        to="/admin"
+                                        className="btn-login mobile-btn"
+                                        style={{
+                                            marginBottom: '0.5rem',
+                                            textAlign: 'center',
+                                            justifyContent: 'center',
+                                            background: 'rgba(139, 92, 246, 0.1)',
+                                            border: '1px solid rgba(139, 92, 246, 0.3)',
+                                            color: '#8b5cf6',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem'
+                                        }}
+                                    >
+                                        <Shield size={18} />
+                                        <span>Admin Panel</span>
+                                    </Link>
+                                )}
                                 <button
                                     onClick={toggleTheme}
                                     className="btn-login mobile-btn"

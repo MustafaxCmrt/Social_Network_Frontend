@@ -1,29 +1,40 @@
+/* Global Box Sizing for Modal Context */
+.modal-overlay * {
+    box-sizing: border-box;
+}
+
 .modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(4px);
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
     display: flex;
     justify-content: center;
     align-items: center;
     z-index: 1000;
-    animation: fadeIn 0.2s ease-out;
+    animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 1rem;
 }
 
 .modal-container {
     background-color: var(--bg-card);
-    border-radius: 12px;
+    border-radius: 16px;
     width: 100%;
-    max-width: 500px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-    border: 1px solid var(--border-color);
-    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    max-width: 600px;
+    box-shadow:
+        0 20px 25px -5px rgba(0, 0, 0, 0.1),
+        0 10px 10px -5px rgba(0, 0, 0, 0.04),
+        0 0 0 1px var(--border-color);
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     display: flex;
     flex-direction: column;
     max-height: 90vh;
+    overflow: hidden;
+    /* Critical for containing children */
+    position: relative;
 }
 
 .modal-header {
@@ -32,38 +43,42 @@
     align-items: center;
     padding: 1.5rem;
     border-bottom: 1px solid var(--border-color);
+    background: var(--bg-card);
+    z-index: 10;
 }
 
 .modal-header h2 {
     font-size: 1.25rem;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-primary);
     margin: 0;
+    letter-spacing: -0.01em;
 }
 
 .modal-close-btn {
-    background: none;
+    background: transparent;
     border: none;
     color: var(--text-secondary);
     cursor: pointer;
     padding: 0.5rem;
     border-radius: 50%;
-    transition: all 0.2s;
+    transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
 .modal-close-btn:hover {
-    background-color: var(--hover-bg);
+    background-color: var(--bg-secondary);
     color: var(--text-primary);
+    transform: rotate(90deg);
 }
 
 .modal-content {
     padding: 1.5rem;
     overflow-y: auto;
-    max-height: calc(90vh - 80px);
     /* Account for header height */
+    max-height: calc(90vh - 80px);
     scrollbar-width: thin;
     scrollbar-color: var(--text-secondary) transparent;
 }
@@ -95,7 +110,7 @@
 @keyframes slideUp {
     from {
         opacity: 0;
-        transform: translateY(20px) scale(0.96);
+        transform: translateY(20px) scale(0.98);
     }
 
     to {
@@ -106,68 +121,114 @@
 
 /* Modal Form Styles */
 .modal-form {
-    margin-top: 0;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
 }
 
+.modal-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.modal-form .form-group label {
+    display: block;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    margin-left: 2px;
+}
+
+.input-wrapper {
+    position: relative;
+}
+
 .modal-input,
 .modal-textarea {
     width: 100%;
-    padding: 1rem;
-    background: var(--input-bg);
-    border: 1px solid var(--navbar-border);
+    padding: 0.875rem 1rem;
+    background: var(--bg-secondary);
+    /* Slight contrast */
+    border: 1px solid transparent;
     color: var(--text-primary);
     border-radius: 12px;
-    font-size: 1rem;
+    font-size: 0.95rem;
     outline: none;
     transition: all 0.2s ease;
-    box-sizing: border-box;
     font-family: inherit;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+    /* Inner depth */
+}
+
+/* Hover state for inputs */
+.modal-input:hover,
+.modal-textarea:hover {
+    background: var(--input-bg);
+    border-color: var(--border-color);
 }
 
 .modal-textarea {
     resize: vertical;
     min-height: 120px;
-    max-height: 300px;
+    max-height: 400px;
     line-height: 1.6;
 }
 
 .modal-input:focus,
 .modal-textarea:focus {
+    background: var(--bg-card);
     border-color: var(--accent-color);
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
-    background-color: var(--bg-card);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
 }
 
+/* Footer / Actions - Robust Full Width Implementation */
 .modal-actions {
     display: flex;
     justify-content: space-between;
+    /* Cancel left, Action right */
     align-items: center;
     gap: 1rem;
-    margin-top: 2rem;
-    padding-top: 1.5rem;
+    /* Spacing from content above */
+    margin-top: 1rem;
+    /* Internal spacing */
+    padding: 1.25rem 1.5rem;
+    /* Visual separation */
     border-top: 1px solid var(--border-color);
+    background-color: var(--bg-card);
+    /* Ensure opaque background */
+
+    /* Negative margins to pull to safe edges */
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
+    margin-bottom: -1.5rem;
+    /* Pull flush to bottom */
+
+    /* Compensate width */
+    width: calc(100% + 3rem);
+
+    /* Sticky bottom behavior if content scrolls (optional, but good for UX) */
+    position: sticky;
+    bottom: -1.5rem;
+    /* Matches margin-bottom */
+    z-index: 5;
 }
 
 .btn-secondary {
     padding: 0.75rem 1.5rem;
     background: transparent;
-    border: 1px solid var(--border-color);
-    /* Visible border */
     color: var(--text-secondary);
-    border-radius: 12px;
+    border: 1px solid transparent;
+    border-radius: 10px;
     cursor: pointer;
-    font-weight: 600;
+    font-weight: 500;
     transition: all 0.2s;
+    font-size: 0.95rem;
 }
 
 .btn-secondary:hover {
     background: var(--bg-secondary);
     color: var(--text-primary);
-    /* Darker text on hover */
-    border-color: var(--text-secondary);
 }
 
 .btn-primary {
@@ -175,24 +236,30 @@
     background: var(--accent-color);
     color: white;
     border: none;
-    border-radius: 12px;
+    border-radius: 10px;
     cursor: pointer;
     font-weight: 600;
     transition: all 0.2s;
-    box-shadow: 0 4px 6px rgba(59, 130, 246, 0.2);
+    box-shadow: 0 4px 10px rgba(59, 130, 246, 0.3);
+    /* Premium shadow */
+    font-size: 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-primary:hover {
     filter: brightness(1.1);
     transform: translateY(-1px);
-    box-shadow: 0 6px 12px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 6px 15px rgba(59, 130, 246, 0.4);
 }
 
-/* Label styling inside modal form group */
-.modal-form .form-group label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    font-size: 0.95rem;
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-primary:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
 }

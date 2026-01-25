@@ -5,6 +5,7 @@ export interface User {
     username: string;
     email: string;
     role: string;
+    isAdmin: boolean;
     isActive: boolean;
     profileImg?: string;
     createdAt: string;
@@ -17,6 +18,12 @@ export interface AuthResponse {
     tokenType: string;
     refreshToken: string;
     refreshTokenExpiresInDays: number;
+    // Login response'tan gelen kullanıcı bilgileri
+    userId: number;
+    username: string;
+    email: string;
+    role: string;
+    isAdmin: boolean;
 }
 
 export interface LoginRequest {
