@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import '../styles/Home.css';
+import { useAuth } from '../context/AuthContext';
 
 const ThreadDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -45,7 +46,8 @@ const ThreadDetail: React.FC = () => {
     const [deletingPostId, setDeletingPostId] = useState<number | null>(null);
 
     // TODO: Current user ID - bunu AuthContext'ten al
-    const currentUserId = 4; // Geçici olarak sabit
+    const { user } = useAuth();
+    const currentUserId = user?.userId;
 
     const fetchThreadData = async () => {
         if (!id) return;
@@ -307,12 +309,29 @@ const ThreadDetail: React.FC = () => {
                 img: undefined // Görseli değiştirmiyoruz şimdilik
             });
 
-            // Update local state
+            // Update local state - Main Posts
             setPosts(prev => prev.map(post =>
                 post.id === editingPostId
                     ? { ...post, content: editContent }
                     : post
             ));
+
+            // Update local state - Nested Replies
+            setPostReplies(prev => {
+                const newMap = new Map(prev);
+                for (const [parentId, replies] of newMap.entries()) {
+                    if (replies.some(r => r.id === editingPostId)) {
+                        const newReplies = replies.map(r =>
+                            r.id === editingPostId
+                                ? { ...r, content: editContent }
+                                : r
+                        );
+                        newMap.set(parentId, newReplies);
+                        break;
+                    }
+                }
+                return newMap;
+            });
 
             toast.success('Başarılı', 'Yorum güncellendi.');
             cancelEdit();
@@ -327,8 +346,55 @@ const ThreadDetail: React.FC = () => {
         try {
             await postService.delete(postId);
 
-            // Remove from local state
-            setPosts(prev => prev.filter(post => post.id !== postId));
+            // 1. Check if it's a main post
+            const isMainPost = posts.some(p => p.id === postId);
+
+            if (isMainPost) {
+                // If main post, just remove it
+                setPosts(prev => prev.filter(post => post.id !== postId));
+            } else {
+                // 2. If it's a nested reply, we need to find its parent to update replyCount
+                let parentId: number | undefined;
+
+                // Find parent ID loop
+                for (const [pId, replies] of postReplies.entries()) {
+                    if (replies.some(r => r.id === postId)) {
+                        parentId = pId;
+                        break;
+                    }
+                }
+
+                if (parentId) {
+                    // Update Nested Replies List
+                    setPostReplies(prev => {
+                        const newMap = new Map(prev);
+                        const currentReplies = newMap.get(parentId) || [];
+                        newMap.set(parentId, currentReplies.filter(r => r.id !== postId));
+                        return newMap;
+                    });
+
+                    // Update Parent Post's replyCount in the main posts list
+                    setPosts(prev => prev.map(post => {
+                        if (post.id === parentId) {
+                            return {
+                                ...post,
+                                replyCount: Math.max(0, (post.replyCount || 0) - 1)
+                            };
+                        }
+                        return post;
+                    }));
+                }
+            }
+
+            // 3. Update Thread total post count locally
+            setThread(prev => {
+                if (!prev) return null;
+                const newCount = prev.postCount ? Math.max(0, prev.postCount - 1) : undefined;
+                return {
+                    ...prev,
+                    postCount: newCount
+                };
+            });
 
             toast.success('Başarılı', 'Yorum silindi.');
             setDeletingPostId(null);
@@ -437,7 +503,7 @@ const ThreadDetail: React.FC = () => {
                                 </span>
                                 <span className="stat-pill" title="Cevaplar">
                                     <MessageSquare size={16} />
-                                    {posts.length}
+                                    {thread.postCount || posts.length}
                                 </span>
                             </div>
                         </div>
@@ -767,12 +833,85 @@ const ThreadDetail: React.FC = () => {
                                                             alt={reply.user?.username}
                                                             className="nested-reply-avatar"
                                                         />
-                                                        <div className="nested-reply-content">
-                                                            <div className="nested-reply-meta">
-                                                                <span className="nested-reply-author">@{reply.user?.username || 'Kullanıcı'}</span>
-                                                                <span className="nested-reply-time">{formatDate(reply.createdAt)}</span>
+                                                        <div className="nested-reply-content" style={{ width: '100%' }}>
+                                                            <div className="nested-reply-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                                <div>
+                                                                    <span className="nested-reply-author">@{reply.user?.username || 'Kullanıcı'}</span>
+                                                                    <span className="nested-reply-time">{formatDate(reply.createdAt)}</span>
+                                                                </div>
+
+                                                                {/* Reply Actions (Edit/Delete) - Only for owner */}
+                                                                {reply.userId === currentUserId && (
+                                                                    <div className="nested-reply-actions">
+                                                                        <button
+                                                                            onClick={() => startEdit(reply)}
+                                                                            className="action-btn-mini edit"
+                                                                            title="Düzenle"
+                                                                        >
+                                                                            <Edit2 size={12} />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => setDeletingPostId(reply.id)}
+                                                                            className="action-btn-mini delete"
+                                                                            title="Sil"
+                                                                        >
+                                                                            <Trash2 size={12} />
+                                                                        </button>
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                            <p>{reply.content}</p>
+
+                                                            {/* Content or Edit Form or Delete Confirm */}
+                                                            {editingPostId === reply.id ? (
+                                                                <div className="inline-reply-form">
+                                                                    <div className="inline-reply-header">
+                                                                        <span>Yorumu Düzenle</span>
+                                                                        <button className="cancel-btn" onClick={cancelEdit}>
+                                                                            <X size={16} />
+                                                                        </button>
+                                                                    </div>
+                                                                    <textarea
+                                                                        value={editContent}
+                                                                        onChange={(e) => setEditContent(e.target.value)}
+                                                                        className="inline-reply-textarea"
+                                                                        rows={2}
+                                                                        autoFocus
+                                                                    />
+                                                                    <div className="inline-reply-actions">
+                                                                        <button
+                                                                            onClick={handleUpdatePost}
+                                                                            disabled={!editContent.trim()}
+                                                                            className="send-reply-btn"
+                                                                        >
+                                                                            <Send size={14} /> Kaydet
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : deletingPostId === reply.id ? (
+                                                                <div className="inline-reply-form" style={{ borderColor: '#ef4444' }}>
+                                                                    <div className="inline-reply-header">
+                                                                        <span style={{ color: '#ef4444' }}>Silmek istediğine emin misin?</span>
+                                                                    </div>
+                                                                    <div className="inline-reply-actions">
+                                                                        <button
+                                                                            onClick={() => setDeletingPostId(null)}
+                                                                            className="action-btn"
+                                                                            style={{ marginRight: '0.5rem' }}
+                                                                        >
+                                                                            İptal
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleDeletePost(reply.id)}
+                                                                            className="send-reply-btn"
+                                                                            style={{ background: '#ef4444' }}
+                                                                        >
+                                                                            <Trash2 size={14} /> Sil
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <p>{reply.content}</p>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 ))}

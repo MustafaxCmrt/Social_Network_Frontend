@@ -153,7 +153,7 @@ const Search: React.FC = () => {
     );
 
     const renderUserItem = (user: User) => (
-        <div key={user.userId} className="search-card user-card">
+        <div key={user.userId} className="search-card user-card" onClick={() => navigate(`/user/${user.userId}`)}>
             <div className="user-avatar-large">
                 {user.profileImg ? (
                     <img src={user.profileImg} alt={user.username} style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />

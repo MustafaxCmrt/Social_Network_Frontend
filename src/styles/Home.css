@@ -1590,3 +1590,49 @@ body.modal-open {
         max-height: 600px;
     }
 }
+/* Nested Reply Actions */
+.nested-reply {
+    position: relative;
+}
+
+.nested-reply-actions {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    display: flex;
+    gap: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.nested-reply:hover .nested-reply-actions {
+    opacity: 1;
+}
+
+.action-btn-mini {
+    padding: 4px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.action-btn-mini:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.action-btn-mini.edit:hover {
+    color: var(--accent-color);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.action-btn-mini.delete:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}

@@ -59,10 +59,27 @@ export interface DeleteResponse {
     message: string;
 }
 
+export interface UserProfile {
+    userId: number;
+    firstName: string;
+    lastName: string;
+    username: string;
+    profileImg: string | null;
+    role?: string; // We will hide this in UI
+    createdAt: string;
+    totalThreads: number;
+    totalPosts: number;
+}
+
 export const userService = {
     // Kendi profilini getir
     getMe: async (): Promise<User> => {
         return api.get<User>('/User/me');
+    },
+
+    // Başka bir kullanıcının profilini getir
+    getUserProfile: async (id: number): Promise<UserProfile> => {
+        return api.get<UserProfile>(`/User/profile/${id}`);
     },
 
     // Kendi profilini güncelle

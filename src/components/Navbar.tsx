@@ -219,9 +219,9 @@ const Navbar: React.FC = () => {
                                                 <div className="preview-header">Kullanıcılar</div>
                                                 {previewResults.users.map((u: any) => (
                                                     <div
-                                                        key={u.id}
+                                                        key={u.userId || u.id}
                                                         className="preview-item"
-                                                        onClick={() => handleResultClick(`/profile/${u.username}`)}
+                                                        onClick={() => handleResultClick(`/user/${u.userId || u.id}`)}
                                                     >
                                                         <div className="preview-avatar">
                                                             {u.profileImg ? (

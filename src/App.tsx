@@ -11,6 +11,7 @@ import ResetPassword from './pages/ResetPassword';
 import ResendVerification from './pages/ResendVerification';
 import VerifyEmail from './pages/VerifyEmail';
 import Profile from './pages/Profile';
+import UserProfile from './pages/UserProfile';
 import ThreadDetail from './pages/ThreadDetail';
 import Search from './pages/Search';
 import ToastContainer from './components/Toast';
@@ -33,6 +34,7 @@ function App() {
                 <Route path="/resend-verification" element={<ResendVerification />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/user/:userId" element={<UserProfile />} />
                 <Route path="/search" element={<Search />} />
                 <Route path="/thread/:id" element={<ThreadDetail />} />
               </Routes>
