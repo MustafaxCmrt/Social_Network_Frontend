@@ -154,9 +154,9 @@ const ThreadDetail: React.FC = () => {
                 setExpandedReplies(prev => new Set(prev).add(parentPostId));
             }
 
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            toast.error('Hata', 'Yorum gönderilirken bir hata oluştu.');
+            toast.error('Hata', err.message || 'Yorum gönderilirken bir hata oluştu.');
         } finally {
             setSubmitting(false);
         }
@@ -188,9 +188,9 @@ const ThreadDetail: React.FC = () => {
                     toast.info('Bilgi', response.message);
                 }
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            toast.error('Hata', 'Beğeni işlemi başarısız oldu.');
+            toast.error('Hata', err.message || 'Beğeni işlemi başarısız oldu.');
         }
     };
 
@@ -215,9 +215,9 @@ const ThreadDetail: React.FC = () => {
 
             toast.success('Çözüm İşaretlendi', 'Bu yorum çözüm olarak işaretlendi.');
 
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            toast.error('Hata', 'Çözüm işaretleme başarısız oldu.');
+            toast.error('Hata', err.message || 'Çözüm işaretleme başarısız oldu.');
         }
     };
 
@@ -239,9 +239,9 @@ const ThreadDetail: React.FC = () => {
 
             toast.success('Çözüm Kaldırıldı', response.message);
 
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            toast.error('Hata', 'Çözüm kaldırma başarısız oldu.');
+            toast.error('Hata', err.message || 'Çözüm kaldırma başarısız oldu.');
         }
     };
 
@@ -335,9 +335,9 @@ const ThreadDetail: React.FC = () => {
 
             toast.success('Başarılı', 'Yorum güncellendi.');
             cancelEdit();
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            toast.error('Hata', 'Güncelleme başarısız oldu.');
+            toast.error('Hata', err.message || 'Güncelleme başarısız oldu.');
         }
     };
 
@@ -398,9 +398,9 @@ const ThreadDetail: React.FC = () => {
 
             toast.success('Başarılı', 'Yorum silindi.');
             setDeletingPostId(null);
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            toast.error('Hata', 'Silme başarısız oldu.');
+            toast.error('Hata', err.message || 'Silme başarısız oldu.');
         }
     };
 

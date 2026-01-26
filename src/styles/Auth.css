@@ -15,12 +15,11 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: calc(100vh - 70px);
+    min-height: calc(100vh - 80px);
     background: radial-gradient(circle at top left, rgba(59, 130, 246, 0.15) 0%, transparent 40%),
         radial-gradient(circle at bottom right, rgba(139, 92, 246, 0.15) 0%, transparent 40%),
         var(--bg-primary);
     padding: 2rem;
-    margin-top: 70px;
 }
 
 .auth-card {
@@ -52,6 +51,7 @@
     font-size: 2rem;
     font-weight: 800;
     background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin-bottom: 0.75rem;

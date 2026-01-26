@@ -6,8 +6,6 @@
     min-height: 100vh;
     color: var(--text-primary);
     background-color: var(--bg-primary);
-    margin-top: 100px;
-    /* Adjusted for taller 80px navbar */
 }
 
 /* Forum Hero */
@@ -1590,6 +1588,7 @@ body.modal-open {
         max-height: 600px;
     }
 }
+
 /* Nested Reply Actions */
 .nested-reply {
     position: relative;

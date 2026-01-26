@@ -35,12 +35,15 @@ import {
     Trash2,
     Eye,
     X,
-    Info
+    Info,
+    AlertCircle,
+    ChevronDown
 } from 'lucide-react';
 import '../styles/Admin.css';
+import { Modal } from '../components/UI/Modal';
 
 const AdminPanel: React.FC = () => {
-    const { isAdmin, isAuthenticated } = useAuth();
+    const { isAdmin, isAuthenticated, isLoading } = useAuth();
     const toast = useToast();
     const navigate = useNavigate();
 
@@ -87,14 +90,24 @@ const AdminPanel: React.FC = () => {
     const [userBans, setUserBans] = useState<UserBan[]>([]);
     const [userMutes, setUserMutes] = useState<UserMute[]>([]);
 
+    // Modal state
+    const [unbanModal, setUnbanModal] = useState<{ isOpen: boolean; userId: number | null }>({ isOpen: false, userId: null });
+    const [unmuteModal, setUnmuteModal] = useState<{ isOpen: boolean; userId: number | null }>({ isOpen: false, userId: null });
+
+    // Sidebar state
+    const [permissionsExpanded, setPermissionsExpanded] = useState(true);
+
+    // Redirect if not admin
     // Redirect if not admin
     useEffect(() => {
+        if (isLoading) return; // Wait for auth loading
+
         if (!isAuthenticated) {
             navigate('/login');
         } else if (!isAdmin) {
             navigate('/');
         }
-    }, [isAuthenticated, isAdmin, navigate]);
+    }, [isAuthenticated, isAdmin, isLoading, navigate]);
 
     // Load dashboard data on mount
     useEffect(() => {
@@ -241,6 +254,7 @@ const AdminPanel: React.FC = () => {
 
             const bans = await moderationService.getUserBans(userId);
             setUserBans(bans);
+            loadDashboardData(); // Update stats
         } catch (error: any) {
             toast.error('Hata', error.message || 'Yasaklama işlemi başarısız.');
         } finally {
@@ -248,16 +262,27 @@ const AdminPanel: React.FC = () => {
         }
     };
 
-    // Unban user
-    const handleUnbanUser = async (userId: number) => {
-        if (!window.confirm('Kullanıcının yasağını kaldırmak istediğinize emin misiniz?')) return;
+    // Unban user - Open Modal
+    const handleUnbanUser = (userId: number) => {
+        setUnbanModal({ isOpen: true, userId });
+    };
+
+    // Confirm Unban
+    const confirmUnban = async () => {
+        if (!unbanModal.userId) return;
 
         try {
-            await moderationService.unbanUser(userId);
+            await moderationService.unbanUser(unbanModal.userId);
             toast.success('Başarılı', 'Kullanıcının yasağı kaldırıldı!');
 
-            const bans = await moderationService.getUserBans(userId);
-            setUserBans(bans);
+            // Update list if viewing that user
+            if (parseInt(searchUserId) === unbanModal.userId) {
+                const bans = await moderationService.getUserBans(unbanModal.userId);
+                setUserBans(bans);
+            }
+
+            loadDashboardData(); // Update stats
+            setUnbanModal({ isOpen: false, userId: null });
         } catch (error: any) {
             toast.error('Hata', error.message || 'Yasak kaldırma işlemi başarısız.');
         }
@@ -306,16 +331,27 @@ const AdminPanel: React.FC = () => {
         }
     };
 
-    // Unmute user
-    const handleUnmuteUser = async (userId: number) => {
-        if (!window.confirm('Kullanıcının susturmasını kaldırmak istediğinize emin misiniz?')) return;
+    // Unmute user - Open Modal
+    const handleUnmuteUser = (userId: number) => {
+        setUnmuteModal({ isOpen: true, userId });
+    };
+
+    // Confirm Unmute
+    const confirmUnmute = async () => {
+        if (!unmuteModal.userId) return;
 
         try {
-            await moderationService.unmuteUser(userId);
+            await moderationService.unmuteUser(unmuteModal.userId);
             toast.success('Başarılı', 'Kullanıcının susturması kaldırıldı!');
 
-            const mutes = await moderationService.getUserMutes(userId);
-            setUserMutes(mutes);
+            // Update list if viewing that user
+            if (parseInt(searchUserId) === unmuteModal.userId) {
+                const mutes = await moderationService.getUserMutes(unmuteModal.userId);
+                setUserMutes(mutes);
+            }
+
+            loadDashboardData(); // Update stats
+            setUnmuteModal({ isOpen: false, userId: null });
         } catch (error: any) {
             toast.error('Hata', error.message || 'Susturma kaldırma işlemi başarısız.');
         }
@@ -435,27 +471,43 @@ const AdminPanel: React.FC = () => {
                         <BarChart3 size={20} />
                         <span>Dashboard</span>
                     </button>
-                    <button
-                        className={`sidebar-item ${activeSection === 'ban' ? 'active' : ''}`}
-                        onClick={() => setActiveSection('ban')}
-                    >
-                        <Ban size={20} />
-                        <span>Yasaklama</span>
-                    </button>
-                    <button
-                        className={`sidebar-item ${activeSection === 'mute' ? 'active' : ''}`}
-                        onClick={() => setActiveSection('mute')}
-                    >
-                        <VolumeX size={20} />
-                        <span>Susturma</span>
-                    </button>
-                    <button
-                        className={`sidebar-item ${activeSection === 'thread' ? 'active' : ''}`}
-                        onClick={() => setActiveSection('thread')}
-                    >
-                        <MessageSquare size={20} />
-                        <span>Konular</span>
-                    </button>
+
+                    <div className="sidebar-group">
+                        <button
+                            className="sidebar-item group-header"
+                            onClick={() => setPermissionsExpanded(!permissionsExpanded)}
+                        >
+                            <Lock size={20} />
+                            <span>İzinler</span>
+                            {permissionsExpanded ? <ChevronDown size={16} className="arrow" /> : <ChevronRight size={16} className="arrow" />}
+                        </button>
+
+                        {permissionsExpanded && (
+                            <div className="sidebar-submenu">
+                                <button
+                                    className={`sidebar-item sub-item ${activeSection === 'ban' ? 'active' : ''}`}
+                                    onClick={() => setActiveSection('ban')}
+                                >
+                                    <Ban size={18} />
+                                    <span>Yasaklama</span>
+                                </button>
+                                <button
+                                    className={`sidebar-item sub-item ${activeSection === 'mute' ? 'active' : ''}`}
+                                    onClick={() => setActiveSection('mute')}
+                                >
+                                    <VolumeX size={18} />
+                                    <span>Susturma</span>
+                                </button>
+                                <button
+                                    className={`sidebar-item sub-item ${activeSection === 'thread' ? 'active' : ''}`}
+                                    onClick={() => setActiveSection('thread')}
+                                >
+                                    <MessageSquare size={18} />
+                                    <span>Konular</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
                     <button
                         className={`sidebar-item ${activeSection === 'logs' ? 'active' : ''}`}
                         onClick={() => setActiveSection('logs')}
@@ -788,7 +840,7 @@ const AdminPanel: React.FC = () => {
                                                     <span>Susturan: @{mute.mutedByUsername}</span>
                                                 </div>
                                             </div>
-                                            {mute.isActive && (
+                                            {mute.isActive && new Date(mute.expiresAt) > new Date() && (
                                                 <button onClick={() => handleUnmuteUser(mute.userId)} className="btn-info btn-sm">
                                                     <CheckCircle size={14} /> Susturmayı Kaldır
                                                 </button>
@@ -798,277 +850,348 @@ const AdminPanel: React.FC = () => {
                                 </div>
                             </div>
                         )}
+
+
                     </div>
                 )}
+
 
                 {/* Thread Section */}
-                {activeSection === 'thread' && (
-                    <div className="admin-section">
-                        <div className="section-header">
-                            <h1><MessageSquare size={28} /> Konu Yönetimi</h1>
-                            <p>Konuları kilitleyin veya kilidini açın</p>
-                        </div>
+                {
+                    activeSection === 'thread' && (
+                        <div className="admin-section">
+                            <div className="section-header">
+                                <h1><MessageSquare size={28} /> Konu Yönetimi</h1>
+                                <p>Konuları kilitleyin veya kilidini açın</p>
+                            </div>
 
-                        <div className="content-card">
-                            <div className="card-header">
-                                <Search size={20} />
-                                <h3>Konu Ara</h3>
+                            <div className="content-card">
+                                <div className="card-header">
+                                    <Search size={20} />
+                                    <h3>Konu Ara</h3>
+                                </div>
+                                <div className="search-form">
+                                    <input
+                                        type="number"
+                                        placeholder="Konu ID"
+                                        value={searchThreadId}
+                                        onChange={(e) => setSearchThreadId(e.target.value)}
+                                        min="1"
+                                    />
+                                </div>
                             </div>
-                            <div className="search-form">
-                                <input
-                                    type="number"
-                                    placeholder="Konu ID"
-                                    value={searchThreadId}
-                                    onChange={(e) => setSearchThreadId(e.target.value)}
-                                    min="1"
-                                />
-                            </div>
-                        </div>
 
-                        <div className="thread-actions-grid">
-                            <div className="content-card action-card danger-card">
-                                <div className="action-icon danger"><Lock size={32} /></div>
-                                <h4>Konuyu Kilitle</h4>
-                                <p>Kilitli konulara yeni yorum yapılamaz.</p>
-                                <button onClick={handleLockThread} disabled={threadLoading || !searchThreadId} className="btn-danger">
-                                    {threadLoading ? 'İşleniyor...' : 'Kilitle'}
-                                    <Lock size={16} />
-                                </button>
-                            </div>
-                            <div className="content-card action-card success-card">
-                                <div className="action-icon success"><Unlock size={32} /></div>
-                                <h4>Kilidi Kaldır</h4>
-                                <p>Konu tekrar yoruma açılır.</p>
-                                <button onClick={handleUnlockThread} disabled={threadLoading || !searchThreadId} className="btn-success">
-                                    {threadLoading ? 'İşleniyor...' : 'Kilidi Kaldır'}
-                                    <Unlock size={16} />
-                                </button>
+                            <div className="thread-actions-grid">
+                                <div className="content-card action-card danger-card">
+                                    <div className="action-icon danger"><Lock size={32} /></div>
+                                    <h4>Konuyu Kilitle</h4>
+                                    <p>Kilitli konulara yeni yorum yapılamaz.</p>
+                                    <button onClick={handleLockThread} disabled={threadLoading || !searchThreadId} className="btn-danger">
+                                        {threadLoading ? 'İşleniyor...' : 'Kilitle'}
+                                        <Lock size={16} />
+                                    </button>
+                                </div>
+                                <div className="content-card action-card success-card">
+                                    <div className="action-icon success"><Unlock size={32} /></div>
+                                    <h4>Kilidi Kaldır</h4>
+                                    <p>Konu tekrar yoruma açılır.</p>
+                                    <button onClick={handleUnlockThread} disabled={threadLoading || !searchThreadId} className="btn-success">
+                                        {threadLoading ? 'İşleniyor...' : 'Kilidi Kaldır'}
+                                        <Unlock size={16} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )
+                }
 
                 {/* Audit Log Section */}
-                {activeSection === 'logs' && (
-                    <div className="admin-section">
-                        <div className="section-header">
-                            <h1><History size={28} /> İşlem Geçmişi</h1>
-                            <p>Tüm admin işlemlerinin kaydı</p>
+                {
+                    activeSection === 'logs' && (
+                        <div className="admin-section">
+                            <div className="section-header">
+                                <h1><History size={28} /> İşlem Geçmişi</h1>
+                                <p>Tüm admin işlemlerinin kaydı</p>
+                            </div>
+
+                            <div className="content-card">
+                                <div className="card-header">
+                                    <History size={20} />
+                                    <h3>İşlem Kayıtları</h3>
+                                    <div className="header-actions">
+                                        <button className="btn-ghost" onClick={() => setShowFilters(!showFilters)}>
+                                            <Filter size={16} />
+                                            {showFilters ? 'Gizle' : 'Filtrele'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Filters */}
+                                {showFilters && (
+                                    <div className="filters-panel">
+                                        <div className="filter-row">
+                                            <div className="filter-group">
+                                                <label>İşlem Tipi</label>
+                                                <select value={auditFilters.action || ''} onChange={(e) => setAuditFilters({ ...auditFilters, action: e.target.value as any || undefined })}>
+                                                    <option value="">Tümü</option>
+                                                    <option value="BanUser">Yasaklama</option>
+                                                    <option value="UnbanUser">Yasak Kaldırma</option>
+                                                    <option value="MuteUser">Susturma</option>
+                                                    <option value="UnmuteUser">Susturma Kaldırma</option>
+                                                    <option value="LockThread">Konu Kilitleme</option>
+                                                    <option value="UnlockThread">Kilit Kaldırma</option>
+                                                </select>
+                                            </div>
+                                            <div className="filter-group">
+                                                <label>Entity Tipi</label>
+                                                <select value={auditFilters.entityType || ''} onChange={(e) => setAuditFilters({ ...auditFilters, entityType: e.target.value as any || undefined })}>
+                                                    <option value="">Tümü</option>
+                                                    <option value="User">Kullanıcı</option>
+                                                    <option value="Thread">Konu</option>
+                                                </select>
+                                            </div>
+                                            <div className="filter-actions">
+                                                <button onClick={handleApplyFilters} className="btn-primary btn-sm"><Filter size={14} /> Uygula</button>
+                                                <button onClick={handleClearFilters} className="btn-ghost btn-sm"><XCircle size={14} /> Temizle</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Cleanup */}
+                                <div className="cleanup-panel">
+                                    <div className="cleanup-info">
+                                        <Trash2 size={16} />
+                                        <span>Eski logları temizle</span>
+                                    </div>
+                                    <div className="cleanup-form">
+                                        <input type="number" value={cleanupDays} onChange={(e) => setCleanupDays(parseInt(e.target.value) || 90)} min="1" max="365" />
+                                        <span>günden eski</span>
+                                        <button onClick={handleCleanupLogs} disabled={cleanupLoading} className="btn-danger btn-sm">
+                                            {cleanupLoading ? 'Temizleniyor...' : 'Temizle'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="log-info">
+                                    <span>Toplam {auditTotalCount} kayıt</span>
+                                </div>
+
+                                {/* Logs Table */}
+                                {auditLoading ? (
+                                    <div className="loading-state">
+                                        <div className="loading-spinner"></div>
+                                        <p>Yükleniyor...</p>
+                                    </div>
+                                ) : auditLogs.length > 0 ? (
+                                    <div className="logs-table">
+                                        <div className="table-header">
+                                            <span className="col-action">İşlem</span>
+                                            <span className="col-user">Admin</span>
+                                            <span className="col-target">Hedef</span>
+                                            <span className="col-status">Durum</span>
+                                            <span className="col-date">Tarih</span>
+                                            <span className="col-actions"></span>
+                                        </div>
+                                        <div className="table-body">
+                                            {auditLogs.map((log) => {
+                                                const actionInfo = getActionInfo(log.action);
+                                                return (
+                                                    <div key={log.id} className="table-row">
+                                                        <div className="col-action">
+                                                            <span className="action-badge" style={{ backgroundColor: `${actionInfo.color}20`, color: actionInfo.color }}>
+                                                                {actionInfo.icon}
+                                                                <span>{actionInfo.name}</span>
+                                                            </span>
+                                                        </div>
+                                                        <div className="col-user">@{log.username}</div>
+                                                        <div className="col-target"><span className="target-badge">{log.entityType} #{log.entityId}</span></div>
+                                                        <div className="col-status">
+                                                            {log.success ? (
+                                                                <span className="status-success"><CheckCircle size={14} /> Başarılı</span>
+                                                            ) : (
+                                                                <span className="status-failed"><XCircle size={14} /> Başarısız</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="col-date"><Clock size={14} /> {formatDate(log.createdAt)}</div>
+                                                        <div className="col-actions">
+                                                            <button onClick={() => handleViewLogDetails(log.id)} className="btn-icon" title="Detaylar">
+                                                                <Eye size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="empty-state">
+                                        <History size={48} />
+                                        <p>Henüz işlem geçmişi bulunmuyor.</p>
+                                    </div>
+                                )}
+
+                                {/* Pagination */}
+                                {auditTotalCount > 0 && (
+                                    <div className="pagination">
+                                        <button onClick={() => setAuditPage(1)} disabled={auditPage === 1} className="pagination-btn" title="İlk Sayfa">
+                                            «
+                                        </button>
+                                        <button onClick={() => setAuditPage(Math.max(1, auditPage - 1))} disabled={auditPage === 1} className="pagination-btn">
+                                            <ChevronLeft size={18} />
+                                        </button>
+                                        <span className="pagination-info">Sayfa {auditPage} / {Math.max(1, auditTotalPages)}</span>
+                                        <button onClick={() => setAuditPage(Math.min(Math.max(1, auditTotalPages), auditPage + 1))} disabled={auditPage >= auditTotalPages} className="pagination-btn">
+                                            <ChevronRight size={18} />
+                                        </button>
+                                        <button onClick={() => setAuditPage(Math.max(1, auditTotalPages))} disabled={auditPage >= auditTotalPages} className="pagination-btn" title="Son Sayfa">
+                                            »
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
+                    )
+                }
+            </main >
 
-                        <div className="content-card">
-                            <div className="card-header">
-                                <History size={20} />
-                                <h3>İşlem Kayıtları</h3>
-                                <div className="header-actions">
-                                    <button className="btn-ghost" onClick={() => setShowFilters(!showFilters)}>
-                                        <Filter size={16} />
-                                        {showFilters ? 'Gizle' : 'Filtrele'}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Filters */}
-                            {showFilters && (
-                                <div className="filters-panel">
-                                    <div className="filter-row">
-                                        <div className="filter-group">
-                                            <label>İşlem Tipi</label>
-                                            <select value={auditFilters.action || ''} onChange={(e) => setAuditFilters({ ...auditFilters, action: e.target.value as any || undefined })}>
-                                                <option value="">Tümü</option>
-                                                <option value="BanUser">Yasaklama</option>
-                                                <option value="UnbanUser">Yasak Kaldırma</option>
-                                                <option value="MuteUser">Susturma</option>
-                                                <option value="UnmuteUser">Susturma Kaldırma</option>
-                                                <option value="LockThread">Konu Kilitleme</option>
-                                                <option value="UnlockThread">Kilit Kaldırma</option>
-                                            </select>
-                                        </div>
-                                        <div className="filter-group">
-                                            <label>Entity Tipi</label>
-                                            <select value={auditFilters.entityType || ''} onChange={(e) => setAuditFilters({ ...auditFilters, entityType: e.target.value as any || undefined })}>
-                                                <option value="">Tümü</option>
-                                                <option value="User">Kullanıcı</option>
-                                                <option value="Thread">Konu</option>
-                                            </select>
-                                        </div>
-                                        <div className="filter-actions">
-                                            <button onClick={handleApplyFilters} className="btn-primary btn-sm"><Filter size={14} /> Uygula</button>
-                                            <button onClick={handleClearFilters} className="btn-ghost btn-sm"><XCircle size={14} /> Temizle</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Cleanup */}
-                            <div className="cleanup-panel">
-                                <div className="cleanup-info">
-                                    <Trash2 size={16} />
-                                    <span>Eski logları temizle</span>
-                                </div>
-                                <div className="cleanup-form">
-                                    <input type="number" value={cleanupDays} onChange={(e) => setCleanupDays(parseInt(e.target.value) || 90)} min="1" max="365" />
-                                    <span>günden eski</span>
-                                    <button onClick={handleCleanupLogs} disabled={cleanupLoading} className="btn-danger btn-sm">
-                                        {cleanupLoading ? 'Temizleniyor...' : 'Temizle'}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="log-info">
-                                <span>Toplam {auditTotalCount} kayıt</span>
-                            </div>
-
-                            {/* Logs Table */}
-                            {auditLoading ? (
-                                <div className="loading-state">
-                                    <div className="loading-spinner"></div>
-                                    <p>Yükleniyor...</p>
-                                </div>
-                            ) : auditLogs.length > 0 ? (
-                                <div className="logs-table">
-                                    <div className="table-header">
-                                        <span className="col-action">İşlem</span>
-                                        <span className="col-user">Admin</span>
-                                        <span className="col-target">Hedef</span>
-                                        <span className="col-status">Durum</span>
-                                        <span className="col-date">Tarih</span>
-                                        <span className="col-actions"></span>
-                                    </div>
-                                    <div className="table-body">
-                                        {auditLogs.map((log) => {
-                                            const actionInfo = getActionInfo(log.action);
-                                            return (
-                                                <div key={log.id} className="table-row">
-                                                    <div className="col-action">
-                                                        <span className="action-badge" style={{ backgroundColor: `${actionInfo.color}20`, color: actionInfo.color }}>
-                                                            {actionInfo.icon}
-                                                            <span>{actionInfo.name}</span>
-                                                        </span>
-                                                    </div>
-                                                    <div className="col-user">@{log.username}</div>
-                                                    <div className="col-target"><span className="target-badge">{log.entityType} #{log.entityId}</span></div>
-                                                    <div className="col-status">
-                                                        {log.success ? (
-                                                            <span className="status-success"><CheckCircle size={14} /> Başarılı</span>
-                                                        ) : (
-                                                            <span className="status-failed"><XCircle size={14} /> Başarısız</span>
-                                                        )}
-                                                    </div>
-                                                    <div className="col-date"><Clock size={14} /> {formatDate(log.createdAt)}</div>
-                                                    <div className="col-actions">
-                                                        <button onClick={() => handleViewLogDetails(log.id)} className="btn-icon" title="Detaylar">
-                                                            <Eye size={16} />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="empty-state">
-                                    <History size={48} />
-                                    <p>Henüz işlem geçmişi bulunmuyor.</p>
-                                </div>
-                            )}
-
-                            {/* Pagination */}
-                            {auditTotalCount > 0 && (
-                                <div className="pagination">
-                                    <button onClick={() => setAuditPage(1)} disabled={auditPage === 1} className="pagination-btn" title="İlk Sayfa">
-                                        «
-                                    </button>
-                                    <button onClick={() => setAuditPage(Math.max(1, auditPage - 1))} disabled={auditPage === 1} className="pagination-btn">
-                                        <ChevronLeft size={18} />
-                                    </button>
-                                    <span className="pagination-info">Sayfa {auditPage} / {Math.max(1, auditTotalPages)}</span>
-                                    <button onClick={() => setAuditPage(Math.min(Math.max(1, auditTotalPages), auditPage + 1))} disabled={auditPage >= auditTotalPages} className="pagination-btn">
-                                        <ChevronRight size={18} />
-                                    </button>
-                                    <button onClick={() => setAuditPage(Math.max(1, auditTotalPages))} disabled={auditPage >= auditTotalPages} className="pagination-btn" title="Son Sayfa">
-                                        »
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+            <Modal
+                isOpen={unbanModal.isOpen}
+                onClose={() => setUnbanModal({ isOpen: false, userId: null })}
+                title="Yasağı Kaldır"
+            >
+                <div className="confirmation-content">
+                    <div className="confirmation-icon">
+                        <AlertCircle size={48} color="#ef4444" />
                     </div>
-                )}
-            </main>
-
-            {/* Log Detail Modal */}
-            {selectedLog && (
-                <div className="modal-overlay" onClick={() => setSelectedLog(null)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h3><Info size={20} /> Log Detayları #{selectedLog.id}</h3>
-                            <button onClick={() => setSelectedLog(null)} className="modal-close"><X size={20} /></button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="detail-grid">
-                                <div className="detail-item">
-                                    <label>İşlem</label>
-                                    <span className="action-badge" style={{ backgroundColor: `${getActionInfo(selectedLog.action).color}20`, color: getActionInfo(selectedLog.action).color }}>
-                                        {getActionInfo(selectedLog.action).icon}
-                                        <span>{getActionInfo(selectedLog.action).name}</span>
-                                    </span>
-                                </div>
-                                <div className="detail-item">
-                                    <label>Admin</label>
-                                    <span>@{selectedLog.username} (ID: {selectedLog.userId})</span>
-                                </div>
-                                <div className="detail-item">
-                                    <label>Hedef</label>
-                                    <span>{selectedLog.entityType} #{selectedLog.entityId}</span>
-                                </div>
-                                <div className="detail-item">
-                                    <label>Durum</label>
-                                    {selectedLog.success ? (
-                                        <span className="status-success"><CheckCircle size={14} /> Başarılı</span>
-                                    ) : (
-                                        <span className="status-failed"><XCircle size={14} /> Başarısız</span>
-                                    )}
-                                </div>
-                                <div className="detail-item">
-                                    <label>Tarih</label>
-                                    <span>{formatDate(selectedLog.createdAt)}</span>
-                                </div>
-                                {selectedLog.oldValue && (
-                                    <div className="detail-item full">
-                                        <label>Eski Değer</label>
-                                        <span className="value-box">{selectedLog.oldValue}</span>
-                                    </div>
-                                )}
-                                {selectedLog.newValue && (
-                                    <div className="detail-item full">
-                                        <label>Yeni Değer</label>
-                                        <span className="value-box">{selectedLog.newValue}</span>
-                                    </div>
-                                )}
-                                {selectedLog.errorMessage && (
-                                    <div className="detail-item full">
-                                        <label>Hata Mesajı</label>
-                                        <span className="value-box error">{selectedLog.errorMessage}</span>
-                                    </div>
-                                )}
-                                {selectedLog.ipAddress && (
-                                    <div className="detail-item">
-                                        <label>IP Adresi</label>
-                                        <span>{selectedLog.ipAddress}</span>
-                                    </div>
-                                )}
-                                {selectedLog.notes && (
-                                    <div className="detail-item full">
-                                        <label>Notlar</label>
-                                        <span className="value-box">{selectedLog.notes}</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                    <p className="confirmation-text">
+                        Bu kullanıcının yasağını kaldırmak istediğinize emin misiniz?
+                        <br />
+                        <span className="confirmation-sub">Bu işlem geri alınamaz ancak kullanıcı tekrar yasaklanabilir.</span>
+                    </p>
+                    <div className="modal-actions">
+                        <button
+                            onClick={() => setUnbanModal({ isOpen: false, userId: null })}
+                            className="btn-secondary"
+                        >
+                            İptal
+                        </button>
+                        <button
+                            onClick={confirmUnban}
+                            className="btn-danger"
+                        >
+                            Yasağı Kaldır
+                        </button>
                     </div>
                 </div>
-            )}
-        </div>
+            </Modal>
+
+            <Modal
+                isOpen={unmuteModal.isOpen}
+                onClose={() => setUnmuteModal({ isOpen: false, userId: null })}
+                title="Susturmayı Kaldır"
+            >
+                <div className="confirmation-content">
+                    <div className="confirmation-icon" style={{ background: 'rgba(59, 130, 246, 0.1)' }}>
+                        <VolumeX size={48} color="#3b82f6" />
+                    </div>
+                    <p className="confirmation-text">
+                        Bu kullanıcının susturmasını kaldırmak istediğinize emin misiniz?
+                        <br />
+                        <span className="confirmation-sub">Kullanıcı tekrar yorum yapabilir ve sohbet edebilir.</span>
+                    </p>
+                    <div className="modal-actions">
+                        <button
+                            onClick={() => setUnmuteModal({ isOpen: false, userId: null })}
+                            className="btn-secondary"
+                        >
+                            İptal
+                        </button>
+                        <button
+                            onClick={confirmUnmute}
+                            className="btn-info"
+                        >
+                            Susturmayı Kaldır
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Log Detail Modal */}
+            {
+                selectedLog && (
+                    <div className="modal-overlay" onClick={() => setSelectedLog(null)}>
+                        <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h3><Info size={20} /> Log Detayları #{selectedLog.id}</h3>
+                                <button onClick={() => setSelectedLog(null)} className="modal-close"><X size={20} /></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="detail-grid">
+                                    <div className="detail-item">
+                                        <label>İşlem</label>
+                                        <span className="action-badge" style={{ backgroundColor: `${getActionInfo(selectedLog.action).color}20`, color: getActionInfo(selectedLog.action).color }}>
+                                            {getActionInfo(selectedLog.action).icon}
+                                            <span>{getActionInfo(selectedLog.action).name}</span>
+                                        </span>
+                                    </div>
+                                    <div className="detail-item">
+                                        <label>Admin</label>
+                                        <span>@{selectedLog.username} (ID: {selectedLog.userId})</span>
+                                    </div>
+                                    <div className="detail-item">
+                                        <label>Hedef</label>
+                                        <span>{selectedLog.entityType} #{selectedLog.entityId}</span>
+                                    </div>
+                                    <div className="detail-item">
+                                        <label>Durum</label>
+                                        {selectedLog.success ? (
+                                            <span className="status-success"><CheckCircle size={14} /> Başarılı</span>
+                                        ) : (
+                                            <span className="status-failed"><XCircle size={14} /> Başarısız</span>
+                                        )}
+                                    </div>
+                                    <div className="detail-item">
+                                        <label>Tarih</label>
+                                        <span>{formatDate(selectedLog.createdAt)}</span>
+                                    </div>
+                                    {selectedLog.oldValue && (
+                                        <div className="detail-item full">
+                                            <label>Eski Değer</label>
+                                            <span className="value-box">{selectedLog.oldValue}</span>
+                                        </div>
+                                    )}
+                                    {selectedLog.newValue && (
+                                        <div className="detail-item full">
+                                            <label>Yeni Değer</label>
+                                            <span className="value-box">{selectedLog.newValue}</span>
+                                        </div>
+                                    )}
+                                    {selectedLog.errorMessage && (
+                                        <div className="detail-item full">
+                                            <label>Hata Mesajı</label>
+                                            <span className="value-box error">{selectedLog.errorMessage}</span>
+                                        </div>
+                                    )}
+                                    {selectedLog.ipAddress && (
+                                        <div className="detail-item">
+                                            <label>IP Adresi</label>
+                                            <span>{selectedLog.ipAddress}</span>
+                                        </div>
+                                    )}
+                                    {selectedLog.notes && (
+                                        <div className="detail-item full">
+                                            <label>Notlar</label>
+                                            <span className="value-box">{selectedLog.notes}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     );
 };
 
