@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { moderationService } from '../services/moderationService';
 import { dashboardService } from '../services/dashboardService';
 import { auditLogService } from '../services/auditLogService';
-import type { UserBan, UserMute, BanUserRequest, MuteUserRequest } from '../services/moderationService';
+import { userService } from '../services/userService';
+import type { UserBan, UserMute, BanUserRequest, MuteUserRequest, UserSearchResult, ThreadSearchResult } from '../services/moderationService';
 import type { DashboardStats, TopUser } from '../services/dashboardService';
 import type { AuditLogItem, AuditLogFilters } from '../services/auditLogService';
+import type { UserListItem, UserProfile, UserThreadListItem, UserPostListItem } from '../services/userService';
 import {
     Shield,
     Ban,
@@ -37,7 +39,9 @@ import {
     X,
     Info,
     AlertCircle,
-    ChevronDown
+    ChevronDown,
+    Pencil,
+    ArrowLeft
 } from 'lucide-react';
 import '../styles/Admin.css';
 import { Modal } from '../components/UI/Modal';
@@ -47,8 +51,26 @@ const AdminPanel: React.FC = () => {
     const toast = useToast();
     const navigate = useNavigate();
 
+    // URL-based section persistence
+    const [searchParams, setSearchParams] = useSearchParams();
+    const initialSection = (searchParams.get('section') as 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs') || 'dashboard';
+
     // Sidebar state
-    const [activeSection, setActiveSection] = useState<'dashboard' | 'ban' | 'mute' | 'thread' | 'logs'>('dashboard');
+    const [activeSection, setActiveSectionState] = useState<'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs'>(initialSection);
+
+    // Wrapper to update both state and URL
+    const setActiveSection = (section: 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs') => {
+        setActiveSectionState(section);
+        setSearchParams({ section });
+    };
+
+    // User Detail state
+    const [viewUser, setViewUser] = useState<UserProfile | null>(null);
+    const [viewUserLoading, setViewUserLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState<'profile' | 'threads' | 'posts'>('profile');
+    const [userThreads, setUserThreads] = useState<UserThreadListItem[]>([]);
+    const [userPosts, setUserPosts] = useState<UserPostListItem[]>([]);
+    const [userContentLoading, setUserContentLoading] = useState(false);
 
     // Dashboard state
     const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
@@ -67,13 +89,26 @@ const AdminPanel: React.FC = () => {
     const [cleanupDays, setCleanupDays] = useState(90);
     const [cleanupLoading, setCleanupLoading] = useState(false);
 
-    // User search
+    // User search (legacy - ID based)
     const [searchUserId, setSearchUserId] = useState<string>('');
-    const [searchLoading, setSearchLoading] = useState(false);
 
-    // Thread search
+    // Thread search (legacy - ID based)
     const [searchThreadId, setSearchThreadId] = useState<string>('');
     const [threadLoading, setThreadLoading] = useState(false);
+
+    // User search (autocomplete)
+    const [userSearchQuery, setUserSearchQuery] = useState<string>('');
+    const [userSearchResults, setUserSearchResults] = useState<UserSearchResult[]>([]);
+    const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(null);
+    const [userSearchLoading, setUserSearchLoading] = useState(false);
+    const [showUserDropdown, setShowUserDropdown] = useState(false);
+
+    // Thread search (autocomplete)
+    const [threadSearchQuery, setThreadSearchQuery] = useState<string>('');
+    const [threadSearchResults, setThreadSearchResults] = useState<ThreadSearchResult[]>([]);
+    const [selectedThread, setSelectedThread] = useState<ThreadSearchResult | null>(null);
+    const [threadSearchLoading, setThreadSearchLoading] = useState(false);
+    const [showThreadDropdown, setShowThreadDropdown] = useState(false);
 
     // Ban state
     const [banReason, setBanReason] = useState('');
@@ -93,6 +128,39 @@ const AdminPanel: React.FC = () => {
     // Modal state
     const [unbanModal, setUnbanModal] = useState<{ isOpen: boolean; userId: number | null }>({ isOpen: false, userId: null });
     const [unmuteModal, setUnmuteModal] = useState<{ isOpen: boolean; userId: number | null }>({ isOpen: false, userId: null });
+
+    // User Management state
+    const [userList, setUserList] = useState<UserListItem[]>([]);
+    const [userListPage, setUserListPage] = useState(1);
+    const [userListTotalPages, setUserListTotalPages] = useState(0);
+    const [userListTotalCount, setUserListTotalCount] = useState(0);
+    const [userListSearch, setUserListSearch] = useState('');
+    const [userListLoading, setUserListLoading] = useState(false);
+
+    // User Create/Edit Modal state
+    const [userModal, setUserModal] = useState<{ isOpen: boolean; mode: 'create' | 'edit'; user: UserListItem | null }>({ isOpen: false, mode: 'create', user: null });
+    const [userFormData, setUserFormData] = useState<{
+        firstName: string;
+        lastName: string;
+        username: string;
+        email: string;
+        password: string;
+        role: string;
+        isActive: boolean;
+    }>({
+        firstName: '',
+        lastName: '',
+        username: '',
+        email: '',
+        password: '',
+        role: 'User',
+        isActive: true
+    });
+    const [userFormLoading, setUserFormLoading] = useState(false);
+
+    // User Delete Modal state
+    const [deleteUserModal, setDeleteUserModal] = useState<{ isOpen: boolean; user: UserListItem | null }>({ isOpen: false, user: null });
+    const [deleteUserLoading, setDeleteUserLoading] = useState(false);
 
     // Sidebar state
     const [permissionsExpanded, setPermissionsExpanded] = useState(true);
@@ -191,15 +259,43 @@ const AdminPanel: React.FC = () => {
         }
     };
 
-    // Fetch user bans/mutes
-    const handleSearchUser = async () => {
-        const userId = parseInt(searchUserId);
-        if (isNaN(userId) || userId <= 0) {
-            toast.error('Geçersiz ID', 'Geçerli bir kullanıcı ID giriniz.');
+    // Autocomplete user search (debounced)
+    const handleUserAutocomplete = async (query: string) => {
+        setUserSearchQuery(query);
+
+        if (query.length < 2) {
+            setUserSearchResults([]);
+            setShowUserDropdown(false);
             return;
         }
 
-        setSearchLoading(true);
+        setUserSearchLoading(true);
+        try {
+            const results = await moderationService.searchUsers(query);
+            setUserSearchResults(results);
+            setShowUserDropdown(true);
+        } catch (error) {
+            console.error('User autocomplete error:', error);
+            setUserSearchResults([]);
+        } finally {
+            setUserSearchLoading(false);
+        }
+    };
+
+    // Select user from autocomplete dropdown
+    const handleSelectUser = (user: UserSearchResult) => {
+        setSelectedUser(user);
+        setSearchUserId(user.userId.toString());
+        setUserSearchQuery(`@${user.username} (${user.firstName} ${user.lastName})`);
+        setShowUserDropdown(false);
+
+        // Auto-fetch bans/mutes for selected user
+        handleSearchUserById(user.userId);
+    };
+
+    // Search by user ID directly
+    const handleSearchUserById = async (userId: number) => {
+        setUserSearchLoading(true);
         try {
             if (activeSection === 'ban') {
                 const bans = await moderationService.getUserBans(userId);
@@ -213,8 +309,39 @@ const AdminPanel: React.FC = () => {
         } catch (error: any) {
             toast.error('Hata', error.message || 'Kullanıcı bilgileri alınamadı.');
         } finally {
-            setSearchLoading(false);
+            setUserSearchLoading(false);
         }
+    };
+
+    // Autocomplete thread search
+    const handleThreadAutocomplete = async (query: string) => {
+        setThreadSearchQuery(query);
+
+        if (query.length < 2) {
+            setThreadSearchResults([]);
+            setShowThreadDropdown(false);
+            return;
+        }
+
+        setThreadSearchLoading(true);
+        try {
+            const results = await moderationService.searchThreads(query);
+            setThreadSearchResults(results);
+            setShowThreadDropdown(true);
+        } catch (error) {
+            console.error('Thread autocomplete error:', error);
+            setThreadSearchResults([]);
+        } finally {
+            setThreadSearchLoading(false);
+        }
+    };
+
+    // Select thread from autocomplete dropdown
+    const handleSelectThread = (thread: ThreadSearchResult) => {
+        setSelectedThread(thread);
+        setSearchThreadId(thread.id.toString());
+        setThreadSearchQuery(thread.title);
+        setShowThreadDropdown(false);
     };
 
     // Ban user
@@ -432,6 +559,221 @@ const AdminPanel: React.FC = () => {
         return max || 10;
     };
 
+
+    const loadUserList = async (page: number = 1, search: string = '') => {
+        setUserListLoading(true);
+        try {
+            const response = await userService.getAll(page, 10, search);
+            setUserList(response.items);
+            setUserListPage(response.page);
+            setUserListTotalPages(response.totalPages);
+            setUserListTotalCount(response.totalCount);
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Kullanıcılar yüklenemedi.');
+        } finally {
+            setUserListLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeSection === 'users') {
+            loadUserList(1, userListSearch);
+        }
+    }, [activeSection]);
+
+    // Reset user form
+    const resetUserForm = () => {
+        setUserFormData({
+            firstName: '',
+            lastName: '',
+            username: '',
+            email: '',
+            password: '',
+            role: 'User',
+            isActive: true
+        });
+    };
+
+    // Open create user modal
+    const openCreateUserModal = () => {
+        resetUserForm();
+        setUserModal({ isOpen: true, mode: 'create', user: null });
+    };
+
+    // Open edit user modal
+    const openEditUserModal = (user: UserListItem) => {
+        setUserFormData({
+            firstName: user.firstName,
+            lastName: user.lastName,
+            username: user.username,
+            email: user.email,
+            password: '',
+            role: user.role,
+            isActive: user.isActive
+        });
+        setUserModal({ isOpen: true, mode: 'edit', user });
+    };
+
+    // Close user modal
+    const closeUserModal = () => {
+        setUserModal({ isOpen: false, mode: 'create', user: null });
+        resetUserForm();
+    };
+
+    // Handle create user
+    const handleCreateUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!userFormData.firstName.trim() || !userFormData.lastName.trim()) {
+            toast.error('Eksik Bilgi', 'Ad ve soyad zorunludur.');
+            return;
+        }
+        if (!userFormData.username.trim()) {
+            toast.error('Eksik Bilgi', 'Kullanıcı adı zorunludur.');
+            return;
+        }
+        if (!userFormData.email.trim()) {
+            toast.error('Eksik Bilgi', 'Email zorunludur.');
+            return;
+        }
+        if (!userFormData.password.trim() || userFormData.password.length < 6) {
+            toast.error('Eksik Bilgi', 'Şifre en az 6 karakter olmalıdır.');
+            return;
+        }
+
+        setUserFormLoading(true);
+        try {
+            await userService.create({
+                firstName: userFormData.firstName.trim(),
+                lastName: userFormData.lastName.trim(),
+                username: userFormData.username.trim(),
+                email: userFormData.email.trim(),
+                password: userFormData.password,
+                role: userFormData.role,
+                isActive: userFormData.isActive
+            });
+            toast.success('Başarılı', 'Kullanıcı başarıyla oluşturuldu!');
+            closeUserModal();
+            loadUserList(userListPage, userListSearch);
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Kullanıcı oluşturulamadı.');
+        } finally {
+            setUserFormLoading(false);
+        }
+    };
+
+    // Handle update user
+    const handleUpdateUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!userModal.user) return;
+
+        if (!userFormData.firstName.trim() || !userFormData.lastName.trim()) {
+            toast.error('Eksik Bilgi', 'Ad ve soyad zorunludur.');
+            return;
+        }
+
+        setUserFormLoading(true);
+        try {
+            await userService.update({
+                userId: userModal.user.userId,
+                firstName: userFormData.firstName.trim(),
+                lastName: userFormData.lastName.trim(),
+                username: userFormData.username.trim() || undefined,
+                email: userFormData.email.trim() || undefined,
+                password: userFormData.password.trim() || undefined,
+                isActive: userFormData.isActive
+            });
+            toast.success('Başarılı', 'Kullanıcı başarıyla düzenlendi!');
+            closeUserModal();
+            loadUserList(userListPage, userListSearch);
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Kullanıcı düzenleme başarısız.');
+        } finally {
+            setUserFormLoading(false);
+        }
+    };
+
+    // Handle delete user
+    const handleDeleteUser = async () => {
+        if (!deleteUserModal.user) return;
+
+        setDeleteUserLoading(true);
+        try {
+            await userService.delete(deleteUserModal.user.userId);
+            toast.success('Başarılı', 'Kullanıcı başarıyla silindi!');
+            setDeleteUserModal({ isOpen: false, user: null });
+            loadUserList(userListPage, userListSearch);
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Kullanıcı silinemedi.');
+        } finally {
+            setDeleteUserLoading(false);
+        }
+    };
+
+    // Handle user list search
+    const handleUserListSearch = (e: React.FormEvent) => {
+        e.preventDefault();
+        setUserListPage(1);
+        loadUserList(1, userListSearch);
+    };
+
+    // Load user profile details
+    const loadUserProfile = async (userId: number) => {
+        setViewUserLoading(true);
+        try {
+            const profile = await userService.getUserProfile(userId);
+            setViewUser(profile);
+            setActiveTab('profile');
+            setActiveSection('user-detail');
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Kullanıcı profili yüklenemedi.');
+        } finally {
+            setViewUserLoading(false);
+        }
+    };
+
+    // Load user threads
+    const loadUserThreads = async (userId: number, page: number = 1) => {
+        setUserContentLoading(true);
+        try {
+            const data = await userService.getUserThreads(userId, page);
+            setUserThreads(data.threads);
+        } catch (error: any) {
+            toast.error('Hata', 'Konular yüklenemedi.');
+        } finally {
+            setUserContentLoading(false);
+        }
+    };
+
+    // Load user posts
+    const loadUserPosts = async (userId: number, page: number = 1) => {
+        setUserContentLoading(true);
+        try {
+            const data = await userService.getUserPosts(userId, page);
+            setUserPosts(data.posts);
+        } catch (error: any) {
+            toast.error('Hata', 'Gönderiler yüklenemedi.');
+        } finally {
+            setUserContentLoading(false);
+        }
+    };
+
+    // Handle tab change
+    const handleTabChange = (tab: 'profile' | 'threads' | 'posts') => {
+        setActiveTab(tab);
+        if (tab === 'threads' && userThreads.length === 0 && viewUser) {
+            loadUserThreads(viewUser.userId);
+        } else if (tab === 'posts' && userPosts.length === 0 && viewUser) {
+            loadUserPosts(viewUser.userId);
+        }
+    };
+
+    // Handle user click from list
+    const handleUserClick = (userId: number) => {
+        loadUserProfile(userId);
+    };
+
     // Get action display name and color
     const getActionInfo = (action: string) => {
         const actions: Record<string, { name: string; color: string; icon: React.ReactNode }> = {
@@ -469,7 +811,15 @@ const AdminPanel: React.FC = () => {
                         onClick={() => setActiveSection('dashboard')}
                     >
                         <BarChart3 size={20} />
-                        <span>Dashboard</span>
+                        <span>Anasayfa</span>
+                    </button>
+
+                    <button
+                        className={`sidebar-item ${activeSection === 'users' ? 'active' : ''}`}
+                        onClick={() => setActiveSection('users')}
+                    >
+                        <Users size={20} />
+                        <span>Kullanıcılar</span>
                     </button>
 
                     <div className="sidebar-group">
@@ -541,7 +891,7 @@ const AdminPanel: React.FC = () => {
                 {activeSection === 'dashboard' && (
                     <div className="admin-section">
                         <div className="section-header">
-                            <h1><BarChart3 size={28} /> Dashboard</h1>
+                            <h1><BarChart3 size={28} /> Anasayfa</h1>
                             <p>Genel istatistikler ve aktiviteler</p>
                         </div>
 
@@ -676,6 +1026,478 @@ const AdminPanel: React.FC = () => {
                     </div>
                 )}
 
+                {/* Users Section */}
+                {activeSection === 'users' && (
+                    <div className="admin-section">
+                        <div className="section-header">
+                            <h1><Users size={28} /> Kullanıcı Yönetimi</h1>
+                            <p>Kullanıcıları görüntüleyin, oluşturun, düzenleyin veya silin</p>
+                        </div>
+
+                        <div className="section-actions">
+                            <form onSubmit={handleUserListSearch} className="search-form">
+                                <input
+                                    type="text"
+                                    placeholder="Kullanıcı ara (isim, email veya kullanıcı adı)..."
+                                    value={userListSearch}
+                                    onChange={(e) => setUserListSearch(e.target.value)}
+                                />
+                                <button type="submit" className="btn-primary" disabled={userListLoading}>
+                                    <Search size={16} />
+                                    Ara
+                                </button>
+                            </form>
+                            <button className="btn-success" onClick={openCreateUserModal}>
+                                <Users size={16} />
+                                Yeni Kullanıcı
+                            </button>
+                        </div>
+
+                        <div className="content-card">
+                            <div className="card-header">
+                                <Users size={20} />
+                                <h3>Kullanıcı Listesi</h3>
+                                <span className="badge">{userListTotalCount} kullanıcı</span>
+                            </div>
+
+                            {userListLoading ? (
+                                <div className="loading-state">Yükleniyor...</div>
+                            ) : userList.length === 0 ? (
+                                <div className="empty-state">
+                                    <Users size={48} />
+                                    <p>Kullanıcı bulunamadı.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="user-table">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Kullanıcı</th>
+                                                    <th>Ad Soyad</th>
+                                                    <th>Email</th>
+                                                    <th>Rol</th>
+                                                    <th>Durum</th>
+                                                    <th>İşlemler</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {userList.map((user) => (
+                                                    <tr key={user.userId} onClick={() => handleUserClick(user.userId)} className="clickable-row">
+                                                        <td>
+                                                            <div className="user-cell">
+                                                                <img
+                                                                    src={user.profileImg || `https://ui-avatars.com/api/?name=${user.firstName}+${user.lastName}&background=random&size=40`}
+                                                                    alt={user.username}
+                                                                    className="user-avatar"
+                                                                />
+                                                                <span>@{user.username}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>{user.firstName} {user.lastName}</td>
+                                                        <td>{user.email}</td>
+                                                        <td>
+                                                            <span className={`role-badge ${user.role.toLowerCase()}`}>
+                                                                {user.role}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <span className={`status-badge ${user.isActive ? 'success' : 'danger'}`}>
+                                                                {user.isActive ? 'Aktif' : 'Pasif'}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <div className="action-buttons" onClick={(e) => e.stopPropagation()}>
+                                                                <button
+                                                                    className="btn-icon edit"
+                                                                    onClick={() => openEditUserModal(user)}
+                                                                    title="Düzenle"
+                                                                >
+                                                                    <Pencil size={16} />
+                                                                </button>
+                                                                <button
+                                                                    className="btn-icon delete"
+                                                                    onClick={() => setDeleteUserModal({ isOpen: true, user })}
+                                                                    title="Sil"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Pagination */}
+                                    {userListTotalPages > 1 && (
+                                        <div className="pagination">
+                                            <button
+                                                onClick={() => loadUserList(userListPage - 1, userListSearch)}
+                                                disabled={userListPage <= 1 || userListLoading}
+                                                className="btn-secondary"
+                                            >
+                                                <ChevronLeft size={16} /> Önceki
+                                            </button>
+                                            <span className="page-info">
+                                                Sayfa {userListPage} / {userListTotalPages}
+                                            </span>
+                                            <button
+                                                onClick={() => loadUserList(userListPage + 1, userListSearch)}
+                                                disabled={userListPage >= userListTotalPages || userListLoading}
+                                                className="btn-secondary"
+                                            >
+                                                Sonraki <ChevronRight size={16} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* User Detail View */}
+                {activeSection === 'user-detail' && (
+                    <div className="admin-section">
+                        <div className="section-header">
+                            <button
+                                className="btn-back"
+                                onClick={() => setActiveSection('users')}
+                            >
+                                <ArrowLeft size={24} />
+                            </button>
+                            <div>
+                                <h1>Kullanıcı Detayı</h1>
+                                <p>Kullanıcı bilgilerini görüntüleyin ve yönetin</p>
+                            </div>
+                        </div>
+
+                        {viewUserLoading ? (
+                            <div className="loading-state">Yükleniyor...</div>
+                        ) : viewUser ? (
+                            <>
+                                <div className="tab-navigation">
+                                    <button
+                                        onClick={() => handleTabChange('profile')}
+                                        className={`tab-btn ${activeTab === 'profile' ? 'active' : ''}`}
+                                    >
+                                        Profil
+                                    </button>
+                                    <button
+                                        onClick={() => handleTabChange('threads')}
+                                        className={`tab-btn ${activeTab === 'threads' ? 'active' : ''}`}
+                                    >
+                                        Konular
+                                    </button>
+                                    <button
+                                        onClick={() => handleTabChange('posts')}
+                                        className={`tab-btn ${activeTab === 'posts' ? 'active' : ''}`}
+                                    >
+                                        Yanıtlar
+                                    </button>
+                                </div>
+
+                                {activeTab === 'profile' && (
+                                    <div className="user-detail-grid">
+                                        {/* Profile Card */}
+                                        <div className="content-card profile-card">
+                                            <div className="profile-header">
+                                                <img
+                                                    src={viewUser.profileImg || `https://ui-avatars.com/api/?name=${viewUser.firstName}+${viewUser.lastName}&background=random&size=120`}
+                                                    alt={viewUser.username}
+                                                    className="profile-large-avatar"
+                                                />
+                                                <div className="profile-info">
+                                                    <h2>{viewUser.firstName} {viewUser.lastName}</h2>
+                                                    <span className="username">@{viewUser.username}</span>
+                                                    <div className="badges">
+                                                        <span className={`role-badge ${viewUser.role?.toLowerCase() || 'user'}`}>
+                                                            {viewUser.role || 'User'}
+                                                        </span>
+                                                        <span className="status-badge success">Aktif</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="profile-actions">
+                                                <button
+                                                    className="btn-primary"
+                                                    onClick={() => openEditUserModal(viewUser as any)} // Type casting for compatibility
+                                                >
+                                                    <Pencil size={16} /> Düzenle
+                                                </button>
+                                                <button
+                                                    className="btn-danger"
+                                                    onClick={() => setDeleteUserModal({ isOpen: true, user: viewUser as any })}
+                                                >
+                                                    <Trash2 size={16} /> Sil
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Stats Card */}
+                                        <div className="content-card stats-card">
+                                            <h3>İstatistikler</h3>
+                                            <div className="stats-list">
+                                                <div className="stat-item">
+                                                    <Calendar size={20} />
+                                                    <div>
+                                                        <span className="label">Kayıt Tarihi</span>
+                                                        <span className="value">{new Date(viewUser.createdAt).toLocaleDateString('tr-TR')}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="stat-item">
+                                                    <MessageSquare size={20} />
+                                                    <div>
+                                                        <span className="label">Toplam Konu</span>
+                                                        <span className="value">{viewUser.totalThreads}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="stat-item">
+                                                    <FileText size={20} />
+                                                    <div>
+                                                        <span className="label">Toplam Gönderi</span>
+                                                        <span className="value">{viewUser.totalPosts}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'threads' && (
+                                    <div className="admin-table-container">
+                                        {userContentLoading ? (
+                                            <div className="loading-state">Konular yükleniyor...</div>
+                                        ) : userThreads.length > 0 ? (
+                                            <div className="user-table">
+                                                <table>
+                                                    <thead>
+                                                        <tr>
+                                                            <th>ID</th>
+                                                            <th>Başlık</th>
+                                                            <th>Görüntülenme</th>
+                                                            <th>Yanıt</th>
+                                                            <th>Durum</th>
+                                                            <th>Oluşturulma</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {userThreads.map(thread => (
+                                                            <tr key={thread.id}>
+                                                                <td>#{thread.id}</td>
+                                                                <td title={thread.title}>{thread.title.length > 30 ? thread.title.substring(0, 30) + '...' : thread.title}</td>
+                                                                <td>{thread.viewCount}</td>
+                                                                <td>{thread.postCount}</td>
+                                                                <td>
+                                                                    <span className={`status-badge ${thread.isSolved ? 'success' : 'warning'}`}>
+                                                                        {thread.isSolved ? 'Çözüldü' : 'Açık'}
+                                                                    </span>
+                                                                </td>
+                                                                <td>{new Date(thread.createdAt).toLocaleDateString('tr-TR')}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ) : (
+                                            <div className="empty-state">Kullanıcının hiç konusu yok.</div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {activeTab === 'posts' && (
+                                    <div className="admin-table-container">
+                                        {userContentLoading ? (
+                                            <div className="loading-state">Gönderiler yükleniyor...</div>
+                                        ) : userPosts.length > 0 ? (
+                                            <div className="user-table">
+                                                <table>
+                                                    <thead>
+                                                        <tr>
+                                                            <th>ID</th>
+                                                            <th>İçerik</th>
+                                                            <th>Konu ID</th>
+                                                            <th>Beğeni</th>
+                                                            <th>Çözüm mü?</th>
+                                                            <th>Tarih</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {userPosts.map(post => (
+                                                            <tr key={post.id}>
+                                                                <td>#{post.id}</td>
+                                                                <td title={post.content}>{post.content.length > 50 ? post.content.substring(0, 50) + '...' : post.content}</td>
+                                                                <td>#{post.threadId}</td>
+                                                                <td>{post.upvoteCount}</td>
+                                                                <td>
+                                                                    {post.isSolution ? (
+                                                                        <span className="status-badge success">Evet</span>
+                                                                    ) : (
+                                                                        <span className="status-badge danger">Hayır</span>
+                                                                    )}
+                                                                </td>
+                                                                <td>{new Date(post.createdAt).toLocaleDateString('tr-TR')}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ) : (
+                                            <div className="empty-state">Kullanıcının hiç gönderisi yok.</div>
+                                        )}
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="empty-state">
+                                <p>Kullanıcı bulunamadı.</p>
+                                <button onClick={() => setActiveSection('users')} className="btn-primary">Geri Dön</button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* User Create/Edit Modal */}
+                <Modal
+                    isOpen={userModal.isOpen}
+                    onClose={closeUserModal}
+                    title={userModal.mode === 'create' ? 'Yeni Kullanıcı Oluştur' : 'Kullanıcı Düzenle'}
+                >
+                    <form onSubmit={userModal.mode === 'create' ? handleCreateUser : handleUpdateUser} className="modal-form">
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label>Ad *</label>
+                                <input
+                                    type="text"
+                                    value={userFormData.firstName}
+                                    onChange={(e) => setUserFormData({ ...userFormData, firstName: e.target.value })}
+                                    placeholder="Ad"
+                                    required
+                                    minLength={2}
+                                    maxLength={50}
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Soyad *</label>
+                                <input
+                                    type="text"
+                                    value={userFormData.lastName}
+                                    onChange={(e) => setUserFormData({ ...userFormData, lastName: e.target.value })}
+                                    placeholder="Soyad"
+                                    required
+                                    minLength={2}
+                                    maxLength={50}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="form-group">
+                            <label>Kullanıcı Adı *</label>
+                            <input
+                                type="text"
+                                value={userFormData.username}
+                                onChange={(e) => setUserFormData({ ...userFormData, username: e.target.value })}
+                                placeholder="kullanici_adi"
+                                required
+                                minLength={3}
+                                maxLength={30}
+                                pattern="^[a-zA-Z0-9_]+$"
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label>Email *</label>
+                            <input
+                                type="email"
+                                value={userFormData.email}
+                                onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
+                                placeholder="email@ornek.com"
+                                required
+                                maxLength={100}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label>{userModal.mode === 'create' ? 'Şifre *' : 'Yeni Şifre (boş bırakılırsa değişmez)'}</label>
+                            <input
+                                type="password"
+                                value={userFormData.password}
+                                onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
+                                placeholder="••••••"
+                                minLength={userModal.mode === 'create' ? 6 : 0}
+                                maxLength={100}
+                                required={userModal.mode === 'create'}
+                            />
+                        </div>
+
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label>Rol</label>
+                                <select
+                                    value={userFormData.role}
+                                    onChange={(e) => setUserFormData({ ...userFormData, role: e.target.value })}
+                                >
+                                    <option value="User">User</option>
+                                    <option value="Admin">Admin</option>
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Durum</label>
+                                <label className="checkbox-label">
+                                    <input
+                                        type="checkbox"
+                                        checked={userFormData.isActive}
+                                        onChange={(e) => setUserFormData({ ...userFormData, isActive: e.target.checked })}
+                                    />
+                                    <span>Aktif</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="modal-actions">
+                            <button type="button" onClick={closeUserModal} className="btn-secondary">
+                                İptal
+                            </button>
+                            <button type="submit" className="btn-primary" disabled={userFormLoading}>
+                                {userFormLoading ? 'Kaydediliyor...' : (userModal.mode === 'create' ? 'Oluştur' : 'Kaydet')}
+                            </button>
+                        </div>
+                    </form>
+                </Modal>
+
+                {/* Delete User Confirmation Modal */}
+                <Modal
+                    isOpen={deleteUserModal.isOpen}
+                    onClose={() => setDeleteUserModal({ isOpen: false, user: null })}
+                    title="Kullanıcı Sil"
+                >
+                    <div className="confirm-modal">
+                        <AlertTriangle size={48} className="warning-icon" />
+                        <p>
+                            <strong>@{deleteUserModal.user?.username}</strong> kullanıcısını silmek istediğinize emin misiniz?
+                        </p>
+                        <p className="text-muted">Bu işlem geri alınamaz!</p>
+                        <div className="modal-actions">
+                            <button
+                                onClick={() => setDeleteUserModal({ isOpen: false, user: null })}
+                                className="btn-secondary"
+                            >
+                                İptal
+                            </button>
+                            <button
+                                onClick={handleDeleteUser}
+                                className="btn-danger"
+                                disabled={deleteUserLoading}
+                            >
+                                {deleteUserLoading ? 'Siliniyor...' : 'Evet, Sil'}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+
                 {/* Ban Section */}
                 {activeSection === 'ban' && (
                     <div className="admin-section">
@@ -689,18 +1511,55 @@ const AdminPanel: React.FC = () => {
                                 <Search size={20} />
                                 <h3>Kullanıcı Ara</h3>
                             </div>
-                            <div className="search-form">
-                                <input
-                                    type="number"
-                                    placeholder="Kullanıcı ID"
-                                    value={searchUserId}
-                                    onChange={(e) => setSearchUserId(e.target.value)}
-                                    min="1"
-                                />
-                                <button onClick={handleSearchUser} disabled={searchLoading || !searchUserId} className="btn-primary">
-                                    {searchLoading ? 'Aranıyor...' : 'Ara'}
-                                    <ChevronRight size={16} />
-                                </button>
+                            <div className="search-form autocomplete-container">
+                                <div className="autocomplete-wrapper">
+                                    <input
+                                        type="text"
+                                        placeholder="Kullanıcı adı, isim veya ID ile ara..."
+                                        value={userSearchQuery}
+                                        onChange={(e) => handleUserAutocomplete(e.target.value)}
+                                        onFocus={() => userSearchResults.length > 0 && setShowUserDropdown(true)}
+                                        onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)}
+                                    />
+                                    {userSearchLoading && <span className="search-spinner"></span>}
+
+                                    {showUserDropdown && userSearchResults.length > 0 && (
+                                        <div className="autocomplete-dropdown">
+                                            {userSearchResults.map((user) => (
+                                                <div
+                                                    key={user.userId}
+                                                    className="autocomplete-item"
+                                                    onMouseDown={() => handleSelectUser(user)}
+                                                >
+                                                    <img
+                                                        src={user.profileImg || `https://ui-avatars.com/api/?name=${user.firstName}+${user.lastName}&background=random&size=32`}
+                                                        alt={user.username}
+                                                        className="autocomplete-avatar"
+                                                    />
+                                                    <div className="autocomplete-info">
+                                                        <span className="autocomplete-name">{user.firstName} {user.lastName}</span>
+                                                        <span className="autocomplete-username">@{user.username}</span>
+                                                    </div>
+                                                    <span className={`autocomplete-role ${user.role.toLowerCase()}`}>{user.role}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {selectedUser && (
+                                    <div className="selected-user-badge">
+                                        <span>Seçili: @{selectedUser.username}</span>
+                                        <button type="button" onClick={() => {
+                                            setSelectedUser(null);
+                                            setSearchUserId('');
+                                            setUserSearchQuery('');
+                                            setUserBans([]);
+                                        }} className="clear-btn">
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -782,18 +1641,55 @@ const AdminPanel: React.FC = () => {
                                 <Search size={20} />
                                 <h3>Kullanıcı Ara</h3>
                             </div>
-                            <div className="search-form">
-                                <input
-                                    type="number"
-                                    placeholder="Kullanıcı ID"
-                                    value={searchUserId}
-                                    onChange={(e) => setSearchUserId(e.target.value)}
-                                    min="1"
-                                />
-                                <button onClick={handleSearchUser} disabled={searchLoading || !searchUserId} className="btn-primary">
-                                    {searchLoading ? 'Aranıyor...' : 'Ara'}
-                                    <ChevronRight size={16} />
-                                </button>
+                            <div className="search-form autocomplete-container">
+                                <div className="autocomplete-wrapper">
+                                    <input
+                                        type="text"
+                                        placeholder="Kullanıcı adı, isim veya ID ile ara..."
+                                        value={userSearchQuery}
+                                        onChange={(e) => handleUserAutocomplete(e.target.value)}
+                                        onFocus={() => userSearchResults.length > 0 && setShowUserDropdown(true)}
+                                        onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)}
+                                    />
+                                    {userSearchLoading && <span className="search-spinner"></span>}
+
+                                    {showUserDropdown && userSearchResults.length > 0 && (
+                                        <div className="autocomplete-dropdown">
+                                            {userSearchResults.map((user) => (
+                                                <div
+                                                    key={user.userId}
+                                                    className="autocomplete-item"
+                                                    onMouseDown={() => handleSelectUser(user)}
+                                                >
+                                                    <img
+                                                        src={user.profileImg || `https://ui-avatars.com/api/?name=${user.firstName}+${user.lastName}&background=random&size=32`}
+                                                        alt={user.username}
+                                                        className="autocomplete-avatar"
+                                                    />
+                                                    <div className="autocomplete-info">
+                                                        <span className="autocomplete-name">{user.firstName} {user.lastName}</span>
+                                                        <span className="autocomplete-username">@{user.username}</span>
+                                                    </div>
+                                                    <span className={`autocomplete-role ${user.role.toLowerCase()}`}>{user.role}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {selectedUser && (
+                                    <div className="selected-user-badge">
+                                        <span>Seçili: @{selectedUser.username}</span>
+                                        <button type="button" onClick={() => {
+                                            setSelectedUser(null);
+                                            setSearchUserId('');
+                                            setUserSearchQuery('');
+                                            setUserMutes([]);
+                                        }} className="clear-btn">
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -840,7 +1736,7 @@ const AdminPanel: React.FC = () => {
                                                     <span>Susturan: @{mute.mutedByUsername}</span>
                                                 </div>
                                             </div>
-                                            {mute.isActive && new Date(mute.expiresAt) > new Date() && (
+                                            {mute.isActive && (
                                                 <button onClick={() => handleUnmuteUser(mute.userId)} className="btn-info btn-sm">
                                                     <CheckCircle size={14} /> Susturmayı Kaldır
                                                 </button>
@@ -870,14 +1766,52 @@ const AdminPanel: React.FC = () => {
                                     <Search size={20} />
                                     <h3>Konu Ara</h3>
                                 </div>
-                                <div className="search-form">
-                                    <input
-                                        type="number"
-                                        placeholder="Konu ID"
-                                        value={searchThreadId}
-                                        onChange={(e) => setSearchThreadId(e.target.value)}
-                                        min="1"
-                                    />
+                                <div className="search-form autocomplete-container">
+                                    <div className="autocomplete-wrapper">
+                                        <input
+                                            type="text"
+                                            placeholder="Konu başlığı ile ara..."
+                                            value={threadSearchQuery}
+                                            onChange={(e) => handleThreadAutocomplete(e.target.value)}
+                                            onFocus={() => threadSearchResults.length > 0 && setShowThreadDropdown(true)}
+                                            onBlur={() => setTimeout(() => setShowThreadDropdown(false), 200)}
+                                        />
+                                        {threadSearchLoading && <span className="search-spinner"></span>}
+
+                                        {showThreadDropdown && threadSearchResults.length > 0 && (
+                                            <div className="autocomplete-dropdown">
+                                                {threadSearchResults.map((thread) => (
+                                                    <div
+                                                        key={thread.id}
+                                                        className="autocomplete-item thread-item"
+                                                        onMouseDown={() => handleSelectThread(thread)}
+                                                    >
+                                                        <div className="autocomplete-info">
+                                                            <span className="autocomplete-name">{thread.title}</span>
+                                                            <span className="autocomplete-username">@{thread.username} • {thread.categoryName}</span>
+                                                        </div>
+                                                        <div className="thread-stats">
+                                                            <span>{thread.postCount} yorum</span>
+                                                            <span>{thread.viewCount} görüntülenme</span>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {selectedThread && (
+                                        <div className="selected-user-badge">
+                                            <span>Seçili: {selectedThread.title.substring(0, 30)}{selectedThread.title.length > 30 ? '...' : ''}</span>
+                                            <button type="button" onClick={() => {
+                                                setSelectedThread(null);
+                                                setSearchThreadId('');
+                                                setThreadSearchQuery('');
+                                            }} className="clear-btn">
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

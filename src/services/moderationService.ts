@@ -105,5 +105,47 @@ export const moderationService = {
      */
     unlockThread: async (threadId: number): Promise<MessageResponse> => {
         return api.put<MessageResponse>(`/Moderation/thread/${threadId}/unlock`, {});
+    },
+
+    /**
+     * Kullanıcı ara (isim, soyisim, kullanıcı adı)
+     */
+    searchUsers: async (query: string): Promise<UserSearchResult[]> => {
+        return api.get<UserSearchResult[]>(`/Moderation/search/users?q=${encodeURIComponent(query)}`);
+    },
+
+    /**
+     * Thread ara (başlık)
+     */
+    searchThreads: async (query: string): Promise<ThreadSearchResult[]> => {
+        return api.get<ThreadSearchResult[]>(`/Moderation/search/threads?q=${encodeURIComponent(query)}`);
     }
 };
+
+// ===== SEARCH Types =====
+export interface UserSearchResult {
+    userId: number;
+    firstName: string;
+    lastName: string;
+    username: string;
+    profileImg: string | null;
+    role: string;
+    totalThreads: number;
+    totalPosts: number;
+    createdAt: string;
+}
+
+export interface ThreadSearchResult {
+    id: number;
+    title: string;
+    content: string;
+    viewCount: number;
+    isSolved: boolean;
+    postCount: number;
+    userId: number;
+    username: string;
+    categoryId: number;
+    categoryName: string;
+    createdAt: string;
+    updatedAt: string;
+}
