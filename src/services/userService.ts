@@ -64,6 +64,7 @@ export interface UserProfile {
     firstName: string;
     lastName: string;
     username: string;
+    email: string;
     profileImg: string | null;
     role?: string; // We will hide this in UI
     createdAt: string;
@@ -115,6 +116,7 @@ export interface UserThreadsResponse {
 export interface UserPostListItem {
     id: number;
     threadId: number;
+    threadTitle: string;
     content: string;
     isSolution: boolean;
     upvoteCount: number;

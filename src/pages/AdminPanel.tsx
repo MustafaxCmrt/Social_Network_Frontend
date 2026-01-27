@@ -71,6 +71,10 @@ const AdminPanel: React.FC = () => {
     const [userThreads, setUserThreads] = useState<UserThreadListItem[]>([]);
     const [userPosts, setUserPosts] = useState<UserPostListItem[]>([]);
     const [userContentLoading, setUserContentLoading] = useState(false);
+    const [threadsPage, setThreadsPage] = useState(1);
+    const [threadsTotalPages, setThreadsTotalPages] = useState(0);
+    const [postsPage, setPostsPage] = useState(1);
+    const [postsTotalPages, setPostsTotalPages] = useState(0);
 
     // Dashboard state
     const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
@@ -675,8 +679,9 @@ const AdminPanel: React.FC = () => {
 
         setUserFormLoading(true);
         try {
+            const updatedUserId = userModal.user.userId;
             await userService.update({
-                userId: userModal.user.userId,
+                userId: updatedUserId,
                 firstName: userFormData.firstName.trim(),
                 lastName: userFormData.lastName.trim(),
                 username: userFormData.username.trim() || undefined,
@@ -687,6 +692,10 @@ const AdminPanel: React.FC = () => {
             toast.success('Başarılı', 'Kullanıcı başarıyla düzenlendi!');
             closeUserModal();
             loadUserList(userListPage, userListSearch);
+            // Eğer kullanıcı detay sayfasındaysak, profili de yenile
+            if (viewUser && viewUser.userId === updatedUserId) {
+                loadUserProfile(updatedUserId);
+            }
         } catch (error: any) {
             toast.error('Hata', error.message || 'Kullanıcı düzenleme başarısız.');
         } finally {
@@ -739,6 +748,8 @@ const AdminPanel: React.FC = () => {
         try {
             const data = await userService.getUserThreads(userId, page);
             setUserThreads(data.threads);
+            setThreadsPage(data.pageNumber);
+            setThreadsTotalPages(data.totalPages);
         } catch (error: any) {
             toast.error('Hata', 'Konular yüklenemedi.');
         } finally {
@@ -752,6 +763,8 @@ const AdminPanel: React.FC = () => {
         try {
             const data = await userService.getUserPosts(userId, page);
             setUserPosts(data.posts);
+            setPostsPage(data.pageNumber);
+            setPostsTotalPages(data.totalPages);
         } catch (error: any) {
             toast.error('Hata', 'Gönderiler yüklenemedi.');
         } finally {
@@ -1272,6 +1285,7 @@ const AdminPanel: React.FC = () => {
                                         {userContentLoading ? (
                                             <div className="loading-state">Konular yükleniyor...</div>
                                         ) : userThreads.length > 0 ? (
+                                            <>
                                             <div className="user-table">
                                                 <table>
                                                     <thead>
@@ -1285,9 +1299,9 @@ const AdminPanel: React.FC = () => {
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {userThreads.map(thread => (
+                                                        {userThreads.map((thread, index) => (
                                                             <tr key={thread.id}>
-                                                                <td>#{thread.id}</td>
+                                                                <td>{index + 1}</td>
                                                                 <td title={thread.title}>{thread.title.length > 30 ? thread.title.substring(0, 30) + '...' : thread.title}</td>
                                                                 <td>{thread.viewCount}</td>
                                                                 <td>{thread.postCount}</td>
@@ -1302,6 +1316,28 @@ const AdminPanel: React.FC = () => {
                                                     </tbody>
                                                 </table>
                                             </div>
+                                            {threadsTotalPages > 1 && (
+                                                <div className="pagination">
+                                                    <button
+                                                        onClick={() => viewUser && loadUserThreads(viewUser.userId, threadsPage - 1)}
+                                                        disabled={threadsPage <= 1 || userContentLoading}
+                                                        className="btn-secondary"
+                                                    >
+                                                        <ChevronLeft size={16} /> Önceki
+                                                    </button>
+                                                    <span className="page-info">
+                                                        Sayfa {threadsPage} / {threadsTotalPages}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => viewUser && loadUserThreads(viewUser.userId, threadsPage + 1)}
+                                                        disabled={threadsPage >= threadsTotalPages || userContentLoading}
+                                                        className="btn-secondary"
+                                                    >
+                                                        Sonraki <ChevronRight size={16} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                            </>
                                         ) : (
                                             <div className="empty-state">Kullanıcının hiç konusu yok.</div>
                                         )}
@@ -1313,24 +1349,25 @@ const AdminPanel: React.FC = () => {
                                         {userContentLoading ? (
                                             <div className="loading-state">Gönderiler yükleniyor...</div>
                                         ) : userPosts.length > 0 ? (
+                                            <>
                                             <div className="user-table">
                                                 <table>
                                                     <thead>
                                                         <tr>
                                                             <th>ID</th>
                                                             <th>İçerik</th>
-                                                            <th>Konu ID</th>
+                                                            <th>Konu</th>
                                                             <th>Beğeni</th>
                                                             <th>Çözüm mü?</th>
                                                             <th>Tarih</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        {userPosts.map(post => (
+                                                        {userPosts.map((post, index) => (
                                                             <tr key={post.id}>
-                                                                <td>#{post.id}</td>
+                                                                <td>{index + 1}</td>
                                                                 <td title={post.content}>{post.content.length > 50 ? post.content.substring(0, 50) + '...' : post.content}</td>
-                                                                <td>#{post.threadId}</td>
+                                                                <td>{post.threadTitle}</td>
                                                                 <td>{post.upvoteCount}</td>
                                                                 <td>
                                                                     {post.isSolution ? (
@@ -1345,6 +1382,28 @@ const AdminPanel: React.FC = () => {
                                                     </tbody>
                                                 </table>
                                             </div>
+                                            {postsTotalPages > 1 && (
+                                                <div className="pagination">
+                                                    <button
+                                                        onClick={() => viewUser && loadUserPosts(viewUser.userId, postsPage - 1)}
+                                                        disabled={postsPage <= 1 || userContentLoading}
+                                                        className="btn-secondary"
+                                                    >
+                                                        <ChevronLeft size={16} /> Önceki
+                                                    </button>
+                                                    <span className="page-info">
+                                                        Sayfa {postsPage} / {postsTotalPages}
+                                                    </span>
+                                                    <button
+                                                        onClick={() => viewUser && loadUserPosts(viewUser.userId, postsPage + 1)}
+                                                        disabled={postsPage >= postsTotalPages || userContentLoading}
+                                                        className="btn-secondary"
+                                                    >
+                                                        Sonraki <ChevronRight size={16} />
+                                                    </button>
+                                                </div>
+                                            )}
+                                            </>
                                         ) : (
                                             <div className="empty-state">Kullanıcının hiç gönderisi yok.</div>
                                         )}
