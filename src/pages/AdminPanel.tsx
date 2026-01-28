@@ -127,7 +127,14 @@ const AdminPanel: React.FC = () => {
 
     // Results with pagination
     const [userBans, setUserBans] = useState<UserBan[]>([]);
+    const [userBansPage, setUserBansPage] = useState(1);
+    const [userBansTotalPages, setUserBansTotalPages] = useState(0);
+    const [userBansTotalCount, setUserBansTotalCount] = useState(0);
+
     const [userMutes, setUserMutes] = useState<UserMute[]>([]);
+    const [userMutesPage, setUserMutesPage] = useState(1);
+    const [userMutesTotalPages, setUserMutesTotalPages] = useState(0);
+    const [userMutesTotalCount, setUserMutesTotalCount] = useState(0);
 
     // Modal state
     const [unbanModal, setUnbanModal] = useState<{ isOpen: boolean; userId: number | null }>({ isOpen: false, userId: null });
@@ -195,6 +202,29 @@ const AdminPanel: React.FC = () => {
         }
     }, [isAdmin, activeSection, auditPage, auditFilters]);
 
+    // Load user profile from URL on page refresh
+    useEffect(() => {
+        if (isAdmin && initialSection === 'user-detail') {
+            const userId = searchParams.get('userId');
+            if (userId) {
+                loadUserProfileFromUrl(parseInt(userId, 10));
+            }
+        }
+    }, [isAdmin]);
+
+    const loadUserProfileFromUrl = async (userId: number) => {
+        setViewUserLoading(true);
+        try {
+            const profile = await userService.getUserProfile(userId);
+            setViewUser(profile);
+            setActiveTab('profile');
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Kullanıcı profili yüklenemedi.');
+        } finally {
+            setViewUserLoading(false);
+        }
+    };
+
     const loadDashboardData = async () => {
         setDashboardLoading(true);
         try {
@@ -217,7 +247,7 @@ const AdminPanel: React.FC = () => {
             const response = await auditLogService.getLogs({
                 ...auditFilters,
                 page: auditPage,
-                pageSize: 15
+                pageSize: 50
             });
             setAuditLogs(response.items);
             setAuditTotalPages(response.totalPages);
@@ -298,23 +328,47 @@ const AdminPanel: React.FC = () => {
     };
 
     // Search by user ID directly
-    const handleSearchUserById = async (userId: number) => {
+    const handleSearchUserById = async (userId: number, page: number = 1) => {
         setUserSearchLoading(true);
         try {
             if (activeSection === 'ban') {
-                const bans = await moderationService.getUserBans(userId);
-                setUserBans(bans);
-                toast.info('Arama Tamamlandı', `${bans.length} yasak kaydı bulundu.`);
+                const response = await moderationService.getUserBans(userId, page);
+                setUserBans(response.items);
+                setUserBansPage(response.page);
+                setUserBansTotalPages(response.totalPages);
+                setUserBansTotalCount(response.totalCount);
+                if (page === 1) {
+                    toast.info('Arama Tamamlandı', `${response.totalCount} yasak kaydı bulundu.`);
+                }
             } else if (activeSection === 'mute') {
-                const mutes = await moderationService.getUserMutes(userId);
-                setUserMutes(mutes);
-                toast.info('Arama Tamamlandı', `${mutes.length} susturma kaydı bulundu.`);
+                const response = await moderationService.getUserMutes(userId, page);
+                setUserMutes(response.items);
+                setUserMutesPage(response.page);
+                setUserMutesTotalPages(response.totalPages);
+                setUserMutesTotalCount(response.totalCount);
+                if (page === 1) {
+                    toast.info('Arama Tamamlandı', `${response.totalCount} susturma kaydı bulundu.`);
+                }
             }
         } catch (error: any) {
             toast.error('Hata', error.message || 'Kullanıcı bilgileri alınamadı.');
         } finally {
             setUserSearchLoading(false);
         }
+    };
+
+    // Load bans for specific page
+    const loadUserBansPage = async (page: number) => {
+        const userId = parseInt(searchUserId);
+        if (isNaN(userId)) return;
+        handleSearchUserById(userId, page);
+    };
+
+    // Load mutes for specific page
+    const loadUserMutesPage = async (page: number) => {
+        const userId = parseInt(searchUserId);
+        if (isNaN(userId)) return;
+        handleSearchUserById(userId, page);
     };
 
     // Autocomplete thread search
@@ -383,8 +437,11 @@ const AdminPanel: React.FC = () => {
             setBanExpiresAt('');
             setIsPermanentBan(false);
 
-            const bans = await moderationService.getUserBans(userId);
-            setUserBans(bans);
+            const response = await moderationService.getUserBans(userId, 1);
+            setUserBans(response.items);
+            setUserBansPage(response.page);
+            setUserBansTotalPages(response.totalPages);
+            setUserBansTotalCount(response.totalCount);
             loadDashboardData(); // Update stats
         } catch (error: any) {
             toast.error('Hata', error.message || 'Yasaklama işlemi başarısız.');
@@ -408,8 +465,10 @@ const AdminPanel: React.FC = () => {
 
             // Update list if viewing that user
             if (parseInt(searchUserId) === unbanModal.userId) {
-                const bans = await moderationService.getUserBans(unbanModal.userId);
-                setUserBans(bans);
+                const response = await moderationService.getUserBans(unbanModal.userId, userBansPage);
+                setUserBans(response.items);
+                setUserBansTotalPages(response.totalPages);
+                setUserBansTotalCount(response.totalCount);
             }
 
             loadDashboardData(); // Update stats
@@ -453,8 +512,11 @@ const AdminPanel: React.FC = () => {
             setMuteReason('');
             setMuteExpiresAt('');
 
-            const mutes = await moderationService.getUserMutes(userId);
-            setUserMutes(mutes);
+            const response = await moderationService.getUserMutes(userId, 1);
+            setUserMutes(response.items);
+            setUserMutesPage(response.page);
+            setUserMutesTotalPages(response.totalPages);
+            setUserMutesTotalCount(response.totalCount);
         } catch (error: any) {
             toast.error('Hata', error.message || 'Susturma işlemi başarısız.');
         } finally {
@@ -477,8 +539,10 @@ const AdminPanel: React.FC = () => {
 
             // Update list if viewing that user
             if (parseInt(searchUserId) === unmuteModal.userId) {
-                const mutes = await moderationService.getUserMutes(unmuteModal.userId);
-                setUserMutes(mutes);
+                const response = await moderationService.getUserMutes(unmuteModal.userId, userMutesPage);
+                setUserMutes(response.items);
+                setUserMutesTotalPages(response.totalPages);
+                setUserMutesTotalCount(response.totalCount);
             }
 
             loadDashboardData(); // Update stats
@@ -687,7 +751,8 @@ const AdminPanel: React.FC = () => {
                 username: userFormData.username.trim() || undefined,
                 email: userFormData.email.trim() || undefined,
                 password: userFormData.password.trim() || undefined,
-                isActive: userFormData.isActive
+                isActive: userFormData.isActive,
+                role: userFormData.role
             });
             toast.success('Başarılı', 'Kullanıcı başarıyla düzenlendi!');
             closeUserModal();
@@ -734,7 +799,8 @@ const AdminPanel: React.FC = () => {
             const profile = await userService.getUserProfile(userId);
             setViewUser(profile);
             setActiveTab('profile');
-            setActiveSection('user-detail');
+            setActiveSectionState('user-detail');
+            setSearchParams({ section: 'user-detail', userId: userId.toString() });
         } catch (error: any) {
             toast.error('Hata', error.message || 'Kullanıcı profili yüklenemedi.');
         } finally {
@@ -1229,7 +1295,9 @@ const AdminPanel: React.FC = () => {
                                                         <span className={`role-badge ${viewUser.role?.toLowerCase() || 'user'}`}>
                                                             {viewUser.role || 'User'}
                                                         </span>
-                                                        <span className="status-badge success">Aktif</span>
+                                                        <span className={`status-badge ${viewUser.isActive ? 'success' : 'danger'}`}>
+                                                            {viewUser.isActive ? 'Aktif' : 'Pasif'}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1656,7 +1724,7 @@ const AdminPanel: React.FC = () => {
                             <div className="content-card">
                                 <div className="card-header">
                                     <AlertTriangle size={20} />
-                                    <h3>Yasaklar ({userBans.length})</h3>
+                                    <h3>Yasaklar ({userBansTotalCount})</h3>
                                 </div>
                                 <div className="records-list">
                                     {userBans.map((ban) => (
@@ -1682,6 +1750,27 @@ const AdminPanel: React.FC = () => {
                                         </div>
                                     ))}
                                 </div>
+                                {userBansTotalPages > 1 && (
+                                    <div className="pagination">
+                                        <button
+                                            onClick={() => loadUserBansPage(userBansPage - 1)}
+                                            disabled={userBansPage <= 1}
+                                            className="pagination-btn"
+                                        >
+                                            <ChevronLeft size={16} />
+                                        </button>
+                                        <span className="pagination-info">
+                                            Sayfa {userBansPage} / {userBansTotalPages}
+                                        </span>
+                                        <button
+                                            onClick={() => loadUserBansPage(userBansPage + 1)}
+                                            disabled={userBansPage >= userBansTotalPages}
+                                            className="pagination-btn"
+                                        >
+                                            <ChevronRight size={16} />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -1778,7 +1867,7 @@ const AdminPanel: React.FC = () => {
                             <div className="content-card">
                                 <div className="card-header">
                                     <AlertTriangle size={20} />
-                                    <h3>Susturmalar ({userMutes.length})</h3>
+                                    <h3>Susturmalar ({userMutesTotalCount})</h3>
                                 </div>
                                 <div className="records-list">
                                     {userMutes.map((mute) => (
@@ -1803,6 +1892,27 @@ const AdminPanel: React.FC = () => {
                                         </div>
                                     ))}
                                 </div>
+                                {userMutesTotalPages > 1 && (
+                                    <div className="pagination">
+                                        <button
+                                            onClick={() => loadUserMutesPage(userMutesPage - 1)}
+                                            disabled={userMutesPage <= 1}
+                                            className="pagination-btn"
+                                        >
+                                            <ChevronLeft size={16} />
+                                        </button>
+                                        <span className="pagination-info">
+                                            Sayfa {userMutesPage} / {userMutesTotalPages}
+                                        </span>
+                                        <button
+                                            onClick={() => loadUserMutesPage(userMutesPage + 1)}
+                                            disabled={userMutesPage >= userMutesTotalPages}
+                                            className="pagination-btn"
+                                        >
+                                            <ChevronRight size={16} />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -1936,7 +2046,7 @@ const AdminPanel: React.FC = () => {
                                                 </select>
                                             </div>
                                             <div className="filter-group">
-                                                <label>Entity Tipi</label>
+                                                <label>Hedef Türü</label>
                                                 <select value={auditFilters.entityType || ''} onChange={(e) => setAuditFilters({ ...auditFilters, entityType: e.target.value as any || undefined })}>
                                                     <option value="">Tümü</option>
                                                     <option value="User">Kullanıcı</option>

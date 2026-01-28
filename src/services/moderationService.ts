@@ -44,6 +44,23 @@ export interface MessageResponse {
     message: string;
 }
 
+// ===== Pagination Response =====
+export interface UserBansResponse {
+    items: UserBan[];
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+}
+
+export interface UserMutesResponse {
+    items: UserMute[];
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+}
+
 export const moderationService = {
     // ===== BAN İşlemleri =====
 
@@ -64,8 +81,8 @@ export const moderationService = {
     /**
      * Kullanıcının yasaklarını getir
      */
-    getUserBans: async (userId: number): Promise<UserBan[]> => {
-        return api.get<UserBan[]>(`/Moderation/user/${userId}/bans`);
+    getUserBans: async (userId: number, page: number = 1, pageSize: number = 10): Promise<UserBansResponse> => {
+        return api.get<UserBansResponse>(`/Moderation/user/${userId}/bans?page=${page}&pageSize=${pageSize}`);
     },
 
     // ===== MUTE İşlemleri =====
@@ -87,8 +104,8 @@ export const moderationService = {
     /**
      * Kullanıcının susturmalarını getir
      */
-    getUserMutes: async (userId: number): Promise<UserMute[]> => {
-        return api.get<UserMute[]>(`/Moderation/user/${userId}/mutes`);
+    getUserMutes: async (userId: number, page: number = 1, pageSize: number = 10): Promise<UserMutesResponse> => {
+        return api.get<UserMutesResponse>(`/Moderation/user/${userId}/mutes?page=${page}&pageSize=${pageSize}`);
     },
 
     // ===== THREAD İşlemleri =====

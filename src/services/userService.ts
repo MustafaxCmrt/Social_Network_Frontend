@@ -31,6 +31,7 @@ export interface UpdateUserRequest {
     email?: string;
     password?: string;
     isActive: boolean;
+    role?: string;
 }
 
 // Response DTOs
@@ -66,8 +67,9 @@ export interface UserProfile {
     username: string;
     email: string;
     profileImg: string | null;
-    role?: string; // We will hide this in UI
+    role?: string;
     createdAt: string;
+    isActive: boolean;
     totalThreads: number;
     totalPosts: number;
 }
