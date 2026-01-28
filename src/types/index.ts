@@ -7,6 +7,7 @@ export interface User {
     role: string;
     isAdmin: boolean;
     isActive: boolean;
+    emailVerified: boolean;
     profileImg?: string;
     createdAt: string;
     updatedAt: string;

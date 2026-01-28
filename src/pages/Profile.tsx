@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { userService } from '../services/userService';
 import type { UpdateProfileRequest } from '../services/userService';
-import { Eye, EyeOff, Camera } from 'lucide-react';
-import '../styles/Auth.css'; // Reusing Auth styles for form elements
+import { Eye, EyeOff, Camera, AlertTriangle, Mail } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import '../styles/Auth.css';
 
 const Profile: React.FC = () => {
-    const { user } = useAuth(); // We use login to re-fetch user data after update
+    const { user } = useAuth();
+    const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<'general' | 'security'>('general');
     const [loading, setLoading] = useState(false);
     const [showPasswords, setShowPasswords] = useState<{ current: boolean, new: boolean, confirm: boolean }>({
@@ -15,6 +17,11 @@ const Profile: React.FC = () => {
         confirm: false
     });
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+    // Email change modals
+    const [emailConfirmModal, setEmailConfirmModal] = useState(false);
+    const [emailSuccessModal, setEmailSuccessModal] = useState(false);
+    const [pendingEmail, setPendingEmail] = useState('');
 
     // Form States
     const [formData, setFormData] = useState<UpdateProfileRequest>({
@@ -27,6 +34,8 @@ const Profile: React.FC = () => {
         newPasswordConfirm: ''
     });
 
+    const [originalEmail, setOriginalEmail] = useState('');
+
     useEffect(() => {
         if (user) {
             setFormData(prev => ({
@@ -36,6 +45,7 @@ const Profile: React.FC = () => {
                 username: user.username,
                 email: user.email
             }));
+            setOriginalEmail(user.email);
         }
     }, [user]);
 
@@ -49,13 +59,9 @@ const Profile: React.FC = () => {
             setLoading(true);
             try {
                 await userService.uploadProfileImage(e.target.files[0]);
-                // Refresh user data to show new image
-                // Hack: we call getCurrentUser via auth context update if possible, 
-                // but simpler to reload or re-fetch. Since we don't have a direct "refreshUser" method exposed in context
-                // we can trigger it or just reload window for now to be safe and simple.
                 window.location.reload();
             } catch (error: any) {
-                setMessage({ type: 'error', text: error.message || 'Resim yüklenirken hata oluştu.' });
+                setMessage({ type: 'error', text: error.message || 'Resim yuklenirken hata olustu.' });
             } finally {
                 setLoading(false);
             }
@@ -65,19 +71,32 @@ const Profile: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setMessage(null);
+
+        // Check if email is being changed
+        if (activeTab === 'general' && formData.email !== originalEmail) {
+            setPendingEmail(formData.email || '');
+            setEmailConfirmModal(true);
+            return;
+        }
+
+        await performUpdate();
+    };
+
+    const performUpdate = async (isEmailChange: boolean = false) => {
         setLoading(true);
 
         try {
-            // Filter empty fields to avoid sending unnecessary data
             const dataToSend: UpdateProfileRequest = {};
             if (activeTab === 'general') {
                 dataToSend.firstName = formData.firstName;
                 dataToSend.lastName = formData.lastName;
                 dataToSend.username = formData.username;
-                dataToSend.email = formData.email;
+                if (isEmailChange) {
+                    dataToSend.email = formData.email;
+                }
             } else {
                 if (formData.newPassword !== formData.newPasswordConfirm) {
-                    throw new Error('Yeni şifreler eşleşmiyor.');
+                    throw new Error('Yeni sifreler eslesmiyor.');
                 }
                 dataToSend.currentPassword = formData.currentPassword;
                 dataToSend.newPassword = formData.newPassword;
@@ -85,7 +104,23 @@ const Profile: React.FC = () => {
             }
 
             await userService.updateProfile(dataToSend);
-            setMessage({ type: 'success', text: 'Profil başarıyla güncellendi.' });
+
+            // Email degisikligi basarili olduysa
+            if (isEmailChange) {
+                setEmailConfirmModal(false);
+                setEmailSuccessModal(true);
+                setLoading(false);
+
+                // 5 saniye sonra otomatik logout
+                setTimeout(() => {
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
+                    window.location.href = '/login';
+                }, 5000);
+                return;
+            }
+
+            setMessage({ type: 'success', text: 'Profil basariyla guncellendi.' });
 
             // Clear password fields
             setFormData(prev => ({
@@ -96,33 +131,48 @@ const Profile: React.FC = () => {
             }));
 
         } catch (error: any) {
-            setMessage({ type: 'error', text: error.message || 'Güncelleme sırasında hata oluştu.' });
+            setEmailConfirmModal(false);
+            setMessage({ type: 'error', text: error.message || 'Guncelleme sirasinda hata olustu.' });
         } finally {
             setLoading(false);
         }
     };
 
+    const handleEmailChangeConfirm = async () => {
+        await performUpdate(true);
+    };
+
+    const handleEmailChangeCancel = () => {
+        setEmailConfirmModal(false);
+        setFormData(prev => ({ ...prev, email: originalEmail }));
+    };
+
+    const handleEmailSuccessClose = async () => {
+        setEmailSuccessModal(false);
+        // Logout and redirect to login
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        navigate('/login');
+    };
+
     const handleDeleteAccount = async () => {
-        if (window.confirm('Hesabınızı kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz!')) {
+        if (window.confirm('Hesabinizi kalici olarak silmek istediginize emin misiniz? Bu islem geri alinamaz!')) {
             try {
                 await userService.deleteAccount();
-                // Logout will handle redirection, but let's force it
                 window.location.href = '/login';
             } catch (error: any) {
-                setMessage({ type: 'error', text: error.message || 'Hesap silinirken hata oluştu.' });
+                setMessage({ type: 'error', text: error.message || 'Hesap silinirken hata olustu.' });
             }
         }
     };
 
-    if (!user) return <div className="text-center p-10 text-white">Yükleniyor...</div>;
+    if (!user) return <div className="text-center p-10 text-white">Yukleniyor...</div>;
 
     return (
         <div className="auth-container" style={{ padding: '2rem' }}>
             <div className="auth-card" style={{ maxWidth: '800px', width: '100%' }}>
-                <h2 className="auth-title">Profil Ayarları</h2>
+                <h2 className="auth-title">Profil Ayarlari</h2>
 
-                {/* Header / Avatar */}
-                {/* Header / Avatar */}
                 {/* Header / Avatar */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '2rem', marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--navbar-border)' }}>
                     <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => document.getElementById('file-upload')?.click()}>
@@ -134,7 +184,6 @@ const Profile: React.FC = () => {
                                     {user.firstName?.charAt(0)}
                                 </div>
                             )}
-                            {/* Hover Overlay */}
                             <div className="avatar-overlay" style={{
                                 position: 'absolute',
                                 top: 0,
@@ -160,7 +209,7 @@ const Profile: React.FC = () => {
                         <h3 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--text-primary)' }}>{user.firstName} {user.lastName}</h3>
                         <p style={{ margin: '0.5rem 0 0', color: 'var(--text-secondary)' }}>@{user.username}</p>
                         <p style={{ margin: '0.25rem 0 0', fontSize: '0.85rem', color: user.isActive ? '#10b981' : '#ef4444' }}>
-                            {user.isActive ? '• Aktif Hesap' : '• Pasif Hesap'}
+                            {user.isActive ? '* Aktif Hesap' : '* Pasif Hesap'}
                         </p>
                     </div>
                 </div>
@@ -195,7 +244,7 @@ const Profile: React.FC = () => {
                             transition: 'all 0.2s'
                         }}
                     >
-                        Güvenlik & Şifre
+                        Guvenlik & Sifre
                     </button>
                 </div>
 
@@ -225,25 +274,31 @@ const Profile: React.FC = () => {
                                 </div>
                             </div>
                             <div className="form-group">
-                                <label>Kullanıcı Adı</label>
+                                <label>Kullanici Adi</label>
                                 <input type="text" name="username" value={formData.username} onChange={handleInputChange} disabled={loading} />
                             </div>
                             <div className="form-group">
                                 <label>Email</label>
                                 <input type="email" name="email" value={formData.email} onChange={handleInputChange} disabled={loading} />
+                                {formData.email !== originalEmail && (
+                                    <p style={{ fontSize: '0.8rem', color: '#f59e0b', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <AlertTriangle size={14} />
+                                        Email degistirdiginizde dogrulama gerekecektir
+                                    </p>
+                                )}
                             </div>
                         </>
                     ) : (
                         <>
                             <div className="form-group">
-                                <label>Mevcut Şifre</label>
+                                <label>Mevcut Sifre</label>
                                 <div style={{ position: 'relative' }}>
                                     <input
                                         type={showPasswords.current ? "text" : "password"}
                                         name="currentPassword"
                                         value={formData.currentPassword}
                                         onChange={handleInputChange}
-                                        placeholder="Değişiklik için gerekli"
+                                        placeholder="Degisiklik icin gerekli"
                                         style={{ width: '100%', paddingRight: '2.5rem', boxSizing: 'border-box' }}
                                     />
                                     <button
@@ -256,7 +311,7 @@ const Profile: React.FC = () => {
                                 </div>
                             </div>
                             <div className="form-group">
-                                <label>Yeni Şifre</label>
+                                <label>Yeni Sifre</label>
                                 <div style={{ position: 'relative' }}>
                                     <input
                                         type={showPasswords.new ? "text" : "password"}
@@ -275,7 +330,7 @@ const Profile: React.FC = () => {
                                 </div>
                             </div>
                             <div className="form-group">
-                                <label>Yeni Şifre (Tekrar)</label>
+                                <label>Yeni Sifre (Tekrar)</label>
                                 <div style={{ position: 'relative' }}>
                                     <input
                                         type={showPasswords.confirm ? "text" : "password"}
@@ -297,7 +352,7 @@ const Profile: React.FC = () => {
                     )}
 
                     <button type="submit" className="btn-primary" disabled={loading} style={{ marginTop: '1rem' }}>
-                        {loading ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
+                        {loading ? 'Kaydediliyor...' : 'Degisiklikleri Kaydet'}
                     </button>
                 </form>
 
@@ -305,7 +360,7 @@ const Profile: React.FC = () => {
                 {activeTab === 'security' && (
                     <div style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '1px solid rgba(239,68,68,0.2)' }}>
                         <h3 style={{ color: '#ef4444', marginTop: 0 }}>Hesap Sil</h3>
-                        <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Hesabınızı sildiğinizde tüm verileriniz kalıcı olarak silinecektir.</p>
+                        <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>Hesabinizi sildiginizde tum verileriniz kalici olarak silinecektir.</p>
                         <button
                             type="button"
                             onClick={handleDeleteAccount}
@@ -320,11 +375,193 @@ const Profile: React.FC = () => {
                                 marginTop: '1rem'
                             }}
                         >
-                            Hesabımı Sil
+                            Hesabimi Sil
                         </button>
                     </div>
                 )}
             </div>
+
+            {/* Email Change Confirmation Modal */}
+            {emailConfirmModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.7)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999
+                }}>
+                    <div style={{
+                        background: 'var(--bg-primary)',
+                        borderRadius: '16px',
+                        padding: '2rem',
+                        maxWidth: '450px',
+                        width: '90%',
+                        border: '1px solid var(--navbar-border)'
+                    }}>
+                        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                            <div style={{
+                                width: '60px',
+                                height: '60px',
+                                background: 'rgba(245, 158, 11, 0.1)',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                margin: '0 auto 1rem'
+                            }}>
+                                <AlertTriangle size={32} color="#f59e0b" />
+                            </div>
+                            <h3 style={{ color: 'var(--text-primary)', margin: 0 }}>Email Degisikligi Onayi</h3>
+                        </div>
+
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6' }}>
+                            <p style={{ marginBottom: '1rem' }}>
+                                Email adresinizi <strong style={{ color: 'var(--text-primary)' }}>{pendingEmail}</strong> olarak degistirmek uzeresiniz.
+                            </p>
+                            <div style={{
+                                background: 'rgba(245, 158, 11, 0.1)',
+                                border: '1px solid rgba(245, 158, 11, 0.3)',
+                                borderRadius: '8px',
+                                padding: '1rem',
+                                marginBottom: '1.5rem'
+                            }}>
+                                <p style={{ margin: 0, fontSize: '0.9rem', color: '#f59e0b' }}>
+                                    <strong>Onemli:</strong> Email degistirdiginizde:
+                                </p>
+                                <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.2rem', fontSize: '0.85rem' }}>
+                                    <li>Oturumunuz kapatilacak</li>
+                                    <li>Yeni email adresinize dogrulama linki gonderilecek</li>
+                                    <li>Dogrulayana kadar giris yapamazsaniz</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '1rem' }}>
+                            <button
+                                onClick={handleEmailChangeCancel}
+                                style={{
+                                    flex: 1,
+                                    padding: '0.75rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid var(--navbar-border)',
+                                    background: 'var(--bg-secondary)',
+                                    color: 'var(--text-primary)',
+                                    cursor: 'pointer',
+                                    fontWeight: 500
+                                }}
+                            >
+                                Iptal
+                            </button>
+                            <button
+                                onClick={handleEmailChangeConfirm}
+                                disabled={loading}
+                                style={{
+                                    flex: 1,
+                                    padding: '0.75rem',
+                                    borderRadius: '8px',
+                                    border: 'none',
+                                    background: '#f59e0b',
+                                    color: 'white',
+                                    cursor: loading ? 'not-allowed' : 'pointer',
+                                    fontWeight: 500,
+                                    opacity: loading ? 0.7 : 1
+                                }}
+                            >
+                                {loading ? 'Kaydediliyor...' : 'Onayla ve Degistir'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Email Change Success Modal */}
+            {emailSuccessModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.7)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999
+                }}>
+                    <div style={{
+                        background: 'var(--bg-primary)',
+                        borderRadius: '16px',
+                        padding: '2rem',
+                        maxWidth: '450px',
+                        width: '90%',
+                        border: '1px solid var(--navbar-border)'
+                    }}>
+                        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                            <div style={{
+                                width: '60px',
+                                height: '60px',
+                                background: 'rgba(16, 185, 129, 0.1)',
+                                borderRadius: '50%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                margin: '0 auto 1rem'
+                            }}>
+                                <Mail size={32} color="#10b981" />
+                            </div>
+                            <h3 style={{ color: '#10b981', margin: 0 }}>Email Degistirildi!</h3>
+                        </div>
+
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: '1.6', textAlign: 'center' }}>
+                            <p style={{ marginBottom: '1rem' }}>
+                                Email adresiniz basariyla degistirildi.
+                            </p>
+                            <div style={{
+                                background: 'rgba(16, 185, 129, 0.1)',
+                                border: '1px solid rgba(16, 185, 129, 0.3)',
+                                borderRadius: '8px',
+                                padding: '1rem',
+                                marginBottom: '1.5rem'
+                            }}>
+                                <p style={{ margin: 0, fontSize: '0.9rem' }}>
+                                    <strong style={{ color: '#10b981' }}>{pendingEmail}</strong> adresine dogrulama linki gonderildi.
+                                </p>
+                                <p style={{ margin: '0.5rem 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                    Lutfen email kutunuzu kontrol edin ve dogrulama linkine tiklayin.
+                                </p>
+                            </div>
+                            <p style={{ fontSize: '0.85rem', color: '#f59e0b', marginBottom: '1rem' }}>
+                                Dogrulama yapana kadar giris yapamazsiniz.
+                            </p>
+                            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+                                5 saniye icinde otomatik cikis yapilacak...
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={handleEmailSuccessClose}
+                            style={{
+                                width: '100%',
+                                padding: '0.75rem',
+                                borderRadius: '8px',
+                                border: 'none',
+                                background: '#10b981',
+                                color: 'white',
+                                cursor: 'pointer',
+                                fontWeight: 500,
+                                marginTop: '1rem'
+                            }}
+                        >
+                            Hemen Cikis Yap
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

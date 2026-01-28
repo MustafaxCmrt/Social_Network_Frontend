@@ -1098,7 +1098,7 @@ const AdminPanel: React.FC = () => {
                         ) : (
                             <div className="empty-state">
                                 <BarChart3 size={48} />
-                                <p>Dashboard verileri yüklenemedi.</p>
+                                <p>Anasayfa verileri yüklenemedi.</p>
                                 <button onClick={loadDashboardData} className="btn-primary">Tekrar Dene</button>
                             </div>
                         )}
@@ -1545,6 +1545,12 @@ const AdminPanel: React.FC = () => {
                                 required
                                 maxLength={100}
                             />
+                            {userModal.mode === 'edit' && userModal.user && userFormData.email !== userModal.user.email && (
+                                <p style={{ fontSize: '0.8rem', color: '#f59e0b', marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <AlertTriangle size={14} />
+                                    Email degistiginde kullanicinin oturumu kapatilacak ve yeni email dogrulanana kadar giris yapamayacak
+                                </p>
+                            )}
                         </div>
 
                         <div className="form-group">

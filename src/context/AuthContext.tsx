@@ -21,6 +21,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Initial check on mount
     useEffect(() => {
         const checkAuth = async () => {
+            // Login sayfasindayken API cagirma - race condition onleme
+            // Sadece token'lari temizle
+            if (window.location.pathname === '/login') {
+                setIsLoading(false);
+                return;
+            }
+
             const token = localStorage.getItem('accessToken');
             if (token) {
                 try {
@@ -40,7 +47,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const login = async (data: LoginRequest) => {
+        // Login oncesi eski token'lari temizle
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+
         const response = await authService.login(data);
+
+        // Token kontrolu - backend token donmediyse hata firlat
+        if (!response.accessToken || !response.refreshToken) {
+            throw new Error('Giris basarisiz - token alinamadi');
+        }
+
         localStorage.setItem('accessToken', response.accessToken);
         localStorage.setItem('refreshToken', response.refreshToken);
 

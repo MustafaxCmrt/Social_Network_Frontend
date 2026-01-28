@@ -62,7 +62,7 @@ export const api = {
   },
 };
 
-async function request<T>(endpoint: string, options: RequestOptions): Promise<T> {
+async function request<T>(endpoint: string, options: RequestOptions, isRetry: boolean = false): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
   const headers = new Headers(options.headers);
 
@@ -77,6 +77,46 @@ async function request<T>(endpoint: string, options: RequestOptions): Promise<T>
     headers,
   });
 
+  // Handle 401 Unauthorized - try refresh token
+  // Skip refresh logic for Auth endpoints (login, register, etc.) - let them handle their own errors
+  const isAuthEndpoint = endpoint.startsWith('/Auth');
+
+  if (response.status === 401 && !isRetry && !isAuthEndpoint) {
+    const refreshToken = localStorage.getItem('refreshToken');
+
+    if (refreshToken) {
+      try {
+        // Try to refresh the token
+        const refreshResponse = await fetch(`${BASE_URL}/Auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+
+        if (refreshResponse.ok) {
+          const refreshData = await refreshResponse.json();
+          localStorage.setItem('accessToken', refreshData.accessToken);
+          localStorage.setItem('refreshToken', refreshData.refreshToken);
+
+          // Retry the original request with new token
+          return request<T>(endpoint, options, true);
+        }
+      } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError);
+      }
+    }
+
+    // Refresh failed or no refresh token - logout and redirect
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+
+    // Eger zaten login sayfasindaysak redirect yapma (race condition onleme)
+    if (window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
+    throw new Error('Oturum suresi doldu. Lutfen tekrar giris yapin.');
+  }
+
   // Handle empty responses or non-JSON
   const contentType = response.headers.get('content-type');
   let data;
@@ -89,7 +129,7 @@ async function request<T>(endpoint: string, options: RequestOptions): Promise<T>
   if (!response.ok) {
     // Try to extract error message from backend structure
     // Backend validation errors might be in "errors" object or "message" string
-    throw new Error(typeof data === 'string' ? data : data.message || JSON.stringify(data) || 'Bir hata oluştu');
+    throw new Error(typeof data === 'string' ? data : data.message || JSON.stringify(data) || 'Bir hata olustu');
   }
 
   // Parse text response as generic T if possible, or wrap it

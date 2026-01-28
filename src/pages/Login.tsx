@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Mail, RefreshCw } from 'lucide-react';
 import '../styles/Auth.css';
 import { Link, useNavigate } from 'react-router-dom';
-// import { authService } from '../services/authService';
+import { authService } from '../services/authService';
 import { useAuth } from '../context/AuthContext';
 
 const Login: React.FC = () => {
@@ -15,33 +15,40 @@ const Login: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [success, setSuccess] = useState(false);
+
+    // Email verification states
+    const [emailNotVerified, setEmailNotVerified] = useState(false);
+    const [resendLoading, setResendLoading] = useState(false);
+    const [resendSuccess, setResendSuccess] = useState(false);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({
             ...formData,
             [e.target.id]: e.target.value
         });
-        // Clear error when user types
-        if (error) setError(null);
+        if (error) {
+            setError(null);
+            setEmailNotVerified(false);
+            setResendSuccess(false);
+        }
     };
 
     const validateForm = (): boolean => {
         if (!formData.usernameOrEmail) {
-            setError('Kullanıcı adı veya email adresi boş olamaz');
+            setError('Kullanici adi veya email adresi bos olamaz');
             return false;
         }
         if (!formData.password) {
-            setError('Şifre boş olamaz');
+            setError('Sifre bos olamaz');
             return false;
         }
         if (formData.password.length < 5) {
-            setError('Şifre en az 5 karakter olmalıdır');
+            setError('Sifre en az 5 karakter olmalidir');
             return false;
         }
         return true;
     };
-
-    const [success, setSuccess] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -50,19 +57,51 @@ const Login: React.FC = () => {
 
         setLoading(true);
         setError(null);
+        setEmailNotVerified(false);
+        setResendSuccess(false);
 
         try {
             await login(formData);
             setLoading(false);
             setSuccess(true);
 
-            // Wait for animation then redirect
             setTimeout(() => {
                 navigate('/');
             }, 1500);
         } catch (err: any) {
-            setError(err.message || 'Giriş yapılırken bir hata oluştu');
+            const errorMessage = err.message || 'Giris yapilirken bir hata olustu';
+            setError(errorMessage);
             setLoading(false);
+
+            // Check if error is about email not verified
+            if (errorMessage.toLowerCase().includes('dogrulanmamis') ||
+                errorMessage.toLowerCase().includes('dogrulama') ||
+                errorMessage.toLowerCase().includes('verified')) {
+                setEmailNotVerified(true);
+            }
+        }
+    };
+
+    const handleResendVerification = async () => {
+        // Try to extract email from usernameOrEmail field
+        const email = formData.usernameOrEmail.includes('@')
+            ? formData.usernameOrEmail
+            : '';
+
+        if (!email) {
+            setError('Dogrulama emaili gondermek icin lutfen email adresinizi girin');
+            return;
+        }
+
+        setResendLoading(true);
+        try {
+            await authService.resendVerificationEmail({ email });
+            setResendSuccess(true);
+            setError(null);
+        } catch (err: any) {
+            setError(err.message || 'Dogrulama emaili gonderilemedi');
+        } finally {
+            setResendLoading(false);
         }
     };
 
@@ -86,19 +125,102 @@ const Login: React.FC = () => {
                                 <polyline points="20 6 9 17 4 12"></polyline>
                             </svg>
                         </div>
-                        <h3 className="auth-title" style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Giriş Başarılı!</h3>
-                        <p className="auth-subtitle">Yönlendiriliyorsunuz...</p>
+                        <h3 className="auth-title" style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>Giris Basarili!</h3>
+                        <p className="auth-subtitle">Yonlendiriliyorsunuz...</p>
                     </div>
                 ) : (
                     <>
-                        <h2 className="auth-title">Giriş Yap</h2>
-                        <p className="auth-subtitle">Tekrar hoşgeldiniz</p>
+                        <h2 className="auth-title">Giris Yap</h2>
+                        <p className="auth-subtitle">Tekrar hosgeldiniz</p>
 
-                        {error && <div className="auth-error" style={{ color: '#ef4444', marginBottom: '1rem', fontSize: '0.9rem', padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px' }}>{error}</div>}
+                        {/* Email not verified special message */}
+                        {emailNotVerified && !resendSuccess && (
+                            <div style={{
+                                background: 'rgba(245, 158, 11, 0.1)',
+                                border: '1px solid rgba(245, 158, 11, 0.3)',
+                                borderRadius: '8px',
+                                padding: '1rem',
+                                marginBottom: '1rem'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                                    <Mail size={20} color="#f59e0b" style={{ marginTop: '2px', flexShrink: 0 }} />
+                                    <div>
+                                        <p style={{ margin: 0, color: '#f59e0b', fontWeight: 500, fontSize: '0.9rem' }}>
+                                            Email Dogrulanmamis
+                                        </p>
+                                        <p style={{ margin: '0.5rem 0 0', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                                            Giris yapabilmek icin email adresinizi dogrulamaniz gerekiyor.
+                                            Email kutunuzu kontrol edin veya yeni dogrulama linki isteyin.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={handleResendVerification}
+                                            disabled={resendLoading}
+                                            style={{
+                                                marginTop: '0.75rem',
+                                                padding: '0.5rem 1rem',
+                                                background: '#f59e0b',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '6px',
+                                                cursor: resendLoading ? 'not-allowed' : 'pointer',
+                                                fontSize: '0.85rem',
+                                                fontWeight: 500,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem',
+                                                opacity: resendLoading ? 0.7 : 1
+                                            }}
+                                        >
+                                            <RefreshCw size={14} className={resendLoading ? 'animate-spin' : ''} />
+                                            {resendLoading ? 'Gonderiliyor...' : 'Dogrulama Emaili Gonder'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Resend success message */}
+                        {resendSuccess && (
+                            <div style={{
+                                background: 'rgba(16, 185, 129, 0.1)',
+                                border: '1px solid rgba(16, 185, 129, 0.3)',
+                                borderRadius: '8px',
+                                padding: '1rem',
+                                marginBottom: '1rem'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                                    <Mail size={20} color="#10b981" style={{ marginTop: '2px', flexShrink: 0 }} />
+                                    <div>
+                                        <p style={{ margin: 0, color: '#10b981', fontWeight: 500, fontSize: '0.9rem' }}>
+                                            Dogrulama Emaili Gonderildi!
+                                        </p>
+                                        <p style={{ margin: '0.5rem 0 0', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                                            Lutfen email kutunuzu kontrol edin ve dogrulama linkine tiklayin.
+                                            Dogruladiktan sonra giris yapabilirsiniz.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Regular error message (only show if not email verification error) */}
+                        {error && !emailNotVerified && (
+                            <div className="auth-error" style={{
+                                color: '#ef4444',
+                                marginBottom: '1rem',
+                                fontSize: '0.9rem',
+                                padding: '0.75rem',
+                                background: 'rgba(239, 68, 68, 0.1)',
+                                borderRadius: '8px'
+                            }}>
+                                {error}
+                            </div>
+                        )}
 
                         <form className="auth-form" onSubmit={handleSubmit}>
                             <div className="form-group">
-                                <label htmlFor="usernameOrEmail">Kullanıcı Adı veya Email</label>
+                                <label htmlFor="usernameOrEmail">Kullanici Adi veya Email</label>
                                 <input
                                     type="text"
                                     id="usernameOrEmail"
@@ -110,12 +232,12 @@ const Login: React.FC = () => {
                             </div>
 
                             <div className="form-group">
-                                <label htmlFor="password">Şifre</label>
+                                <label htmlFor="password">Sifre</label>
                                 <div className="password-input-wrapper">
                                     <input
                                         type={showPassword ? "text" : "password"}
                                         id="password"
-                                        placeholder="••••••••"
+                                        placeholder="********"
                                         value={formData.password}
                                         onChange={handleChange}
                                         disabled={loading}
@@ -132,11 +254,11 @@ const Login: React.FC = () => {
                             </div>
 
                             <div className="form-footer">
-                                <Link to="/forgot-password" className="forgot-password">Şifremi unuttum</Link>
+                                <Link to="/forgot-password" className="forgot-password">Sifremi unuttum</Link>
                             </div>
 
                             <button type="submit" className="btn-primary" disabled={loading}>
-                                {loading ? 'Giriş Yapılıyor...' : 'Giriş Yap'}
+                                {loading ? 'Giris Yapiliyor...' : 'Giris Yap'}
                             </button>
                         </form>
 
@@ -161,7 +283,7 @@ const Login: React.FC = () => {
                         </button>
 
                         <p className="auth-redirect">
-                            Hesabınız yok mu? <Link to="/register">Kayıt Ol</Link>
+                            Hesabiniz yok mu? <Link to="/register">Kayit Ol</Link>
                         </p>
                     </>
                 )}

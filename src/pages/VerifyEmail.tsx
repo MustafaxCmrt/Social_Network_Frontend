@@ -31,7 +31,10 @@ const VerifyEmail: React.FC = () => {
                 setMessage(response.message || 'Email adresiniz başarıyla doğrulandı.');
 
                 // Başarılı olduktan 3 saniye sonra login sayfasına yönlendir
+                // Eski token'ları temizle
                 setTimeout(() => {
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
                     navigate('/login');
                 }, 3000);
             } catch (err: any) {
@@ -64,9 +67,17 @@ const VerifyEmail: React.FC = () => {
                         <p style={{ fontSize: '0.9rem', color: '#6b7280', marginTop: '1rem' }}>
                             3 saniye içinde giriş sayfasına yönlendiriliyorsunuz...
                         </p>
-                        <Link to="/login" className="btn-primary" style={{ marginTop: '1rem', textDecoration: 'none' }}>
+                        <button
+                            onClick={() => {
+                                localStorage.removeItem('accessToken');
+                                localStorage.removeItem('refreshToken');
+                                navigate('/login');
+                            }}
+                            className="btn-primary"
+                            style={{ marginTop: '1rem', textDecoration: 'none', cursor: 'pointer' }}
+                        >
                             Hemen Giriş Yap
-                        </Link>
+                        </button>
                     </div>
                 )}
 
