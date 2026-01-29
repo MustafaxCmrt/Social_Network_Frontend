@@ -29,8 +29,9 @@
 
 .navbar-logo {
     flex-shrink: 0;
-    width: 200px;
-    /* Fixed width to help centering */
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .navbar-logo .logo-text {
@@ -42,7 +43,28 @@
     cursor: pointer;
     letter-spacing: -0.5px;
     font-family: 'Cinzel', serif;
-    /* Use more premium font if available */
+}
+
+/* Forum Breadcrumb */
+.forum-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+.breadcrumb-separator {
+    color: var(--navbar-border);
+    font-weight: 300;
+}
+
+.breadcrumb-text {
+    font-weight: 600;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 /* Centered Search Bar */

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { Sun, Moon, Menu, X, LogOut, Settings, ChevronDown, Search, Bell, CheckCheck, Trash2, Shield } from 'lucide-react';
@@ -120,6 +120,8 @@ const Navbar: React.FC = () => {
     const dropdownRef = React.useRef<HTMLDivElement>(null);
 
     const navigate = useNavigate();
+    const location = useLocation();
+    const isHomePage = location.pathname === '/';
 
     // Close dropdown on outside click
     React.useEffect(() => {
@@ -188,6 +190,12 @@ const Navbar: React.FC = () => {
                     {/* Logo */}
                     <div className="navbar-logo">
                         <Link to="/" className="logo-text" style={{ textDecoration: 'none' }}>SocialNet</Link>
+                        {isHomePage && (
+                            <span className="forum-breadcrumb">
+                                <span className="breadcrumb-separator">/</span>
+                                <span className="breadcrumb-text">Topluluk Forumu</span>
+                            </span>
+                        )}
                     </div>
 
                     {/* Desktop Menu */}

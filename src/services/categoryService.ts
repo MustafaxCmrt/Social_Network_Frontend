@@ -1,9 +1,37 @@
 import { api } from './api';
 import type { Category, CreateCategoryDto, UpdateCategoryDto } from '../types/category';
 
+interface PaginatedCategoryResponse {
+    items: Category[];
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+}
+
+interface GetPaginatedParams {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    parentCategoryId?: number | null;
+}
+
 export const categoryService = {
+    // Sadece ana kategorileri getirir
     getAll: async (): Promise<Category[]> => {
         return await api.get<Category[]>('/Category/getAll');
+    },
+
+    getPaginated: async (params: GetPaginatedParams): Promise<PaginatedCategoryResponse> => {
+        const queryParams = new URLSearchParams();
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.pageSize) queryParams.append('pageSize', params.pageSize.toString());
+        if (params.search) queryParams.append('search', params.search);
+        if (params.parentCategoryId !== undefined && params.parentCategoryId !== null) {
+            queryParams.append('parentCategoryId', params.parentCategoryId.toString());
+        }
+        
+        return await api.get<PaginatedCategoryResponse>(`/Category/paginated?${queryParams.toString()}`);
     },
 
     getById: async (id: number): Promise<Category> => {

@@ -13,23 +13,43 @@ interface ThreadModalProps {
     editThread?: Thread | null;
 }
 
+interface FlatCategory extends Category {
+    level: number; // Kategori seviyesi (0 = ana, 1 = alt, 2 = alt-alt)
+}
+
+// Tree yapısını düz listeye çevir
+const flattenCategories = (categories: Category[], level: number = 0): FlatCategory[] => {
+    let result: FlatCategory[] = [];
+    
+    categories.forEach(category => {
+        result.push({ ...category, level });
+        
+        if (category.subCategories && category.subCategories.length > 0) {
+            result = result.concat(flattenCategories(category.subCategories, level + 1));
+        }
+    });
+    
+    return result;
+};
+
 export const ThreadModal: React.FC<ThreadModalProps> = ({ isOpen, onClose, onSubmit, editThread }) => {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [categoryId, setCategoryId] = useState<number>(0);
-    const [categories, setCategories] = useState<Category[]>([]);
+    const [categories, setCategories] = useState<FlatCategory[]>([]);
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Fetch categories for the select box
+        // Fetch tree and flatten for the select box
         const loadCategories = async () => {
             try {
-                const data = await categoryService.getAll();
-                setCategories(data);
-                if (data.length > 0 && !editThread) {
-                    setCategoryId(data[0].id);
+                const treeData = await categoryService.getTree();
+                const flatData = flattenCategories(treeData);
+                setCategories(flatData);
+                if (flatData.length > 0 && !editThread) {
+                    setCategoryId(flatData[0].id);
                 }
             } catch (err) {
                 console.error("Kategoriler yüklenemedi", err);
@@ -39,7 +59,7 @@ export const ThreadModal: React.FC<ThreadModalProps> = ({ isOpen, onClose, onSub
         if (isOpen) {
             loadCategories();
         }
-    }, [isOpen]);
+    }, [isOpen, editThread]);
 
     useEffect(() => {
         if (editThread) {
@@ -137,11 +157,15 @@ export const ThreadModal: React.FC<ThreadModalProps> = ({ isOpen, onClose, onSub
                             style={{ cursor: 'pointer' }}
                         >
                             <option value={0} disabled>Kategori Seçiniz</option>
-                            {categories.map(cat => (
-                                <option key={cat.id} value={cat.id}>
-                                    {cat.title}
-                                </option>
-                            ))}
+                            {categories.map(cat => {
+                                // Seviyeye göre girintili gösterim
+                                const indent = '  '.repeat(cat.level) + (cat.level > 0 ? '└─ ' : '');
+                                return (
+                                    <option key={cat.id} value={cat.id}>
+                                        {indent}{cat.title}
+                                    </option>
+                                );
+                            })}
                         </select>
                     </div>
                 </div>

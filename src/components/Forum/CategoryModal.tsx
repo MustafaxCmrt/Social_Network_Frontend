@@ -8,11 +8,21 @@ interface CategoryModalProps {
     onClose: () => void;
     onSubmit: (data: CreateCategoryDto | UpdateCategoryDto) => Promise<void>;
     editCategory?: Category | null;
+    categories?: Category[];
+    parentCategoryId?: number | null;
 }
 
-export const CategoryModal: React.FC<CategoryModalProps> = ({ isOpen, onClose, onSubmit, editCategory }) => {
+export const CategoryModal: React.FC<CategoryModalProps> = ({ 
+    isOpen, 
+    onClose, 
+    onSubmit, 
+    editCategory, 
+    categories = [],
+    parentCategoryId = null 
+}) => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
+    const [selectedParentId, setSelectedParentId] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -20,12 +30,14 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({ isOpen, onClose, o
         if (editCategory) {
             setTitle(editCategory.title);
             setDescription(editCategory.description || '');
+            setSelectedParentId(editCategory.parentCategoryId || null);
         } else {
             setTitle('');
             setDescription('');
+            setSelectedParentId(parentCategoryId);
         }
         setError(null);
-    }, [editCategory, isOpen]);
+    }, [editCategory, isOpen, parentCategoryId]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -52,8 +64,17 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({ isOpen, onClose, o
         setLoading(true);
         try {
             const data = editCategory
-                ? { id: editCategory.id, title, description } as UpdateCategoryDto
-                : { title, description } as CreateCategoryDto;
+                ? { 
+                    id: editCategory.id, 
+                    title, 
+                    description,
+                    parentCategoryId: selectedParentId || undefined
+                } as UpdateCategoryDto
+                : { 
+                    title, 
+                    description,
+                    parentCategoryId: selectedParentId || undefined
+                } as CreateCategoryDto;
 
             await onSubmit(data);
             onClose();
@@ -64,14 +85,48 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({ isOpen, onClose, o
         }
     };
 
+    // Ana kategorileri filtrele (edit edilen kategori hariç)
+    const rootCategories = categories.filter(cat => 
+        !cat.parentCategoryId && (!editCategory || cat.id !== editCategory.id)
+    );
+
     return (
         <Modal
             isOpen={isOpen}
             onClose={onClose}
-            title={editCategory ? 'Kategoriyi Düzenle' : 'Yeni Kategori Ekle'}
+            title={
+                parentCategoryId 
+                    ? 'Yeni Alt Kategori Ekle' 
+                    : editCategory 
+                        ? 'Kategoriyi Düzenle' 
+                        : 'Yeni Kategori Ekle'
+            }
         >
             <form onSubmit={handleSubmit} className="modal-form">
                 {error && <div className="error-message">{error}</div>}
+
+                <div className="form-group">
+                    <label htmlFor="parentCategory">Kategori Tipi</label>
+                    <div className="input-wrapper">
+                        <select
+                            className="modal-input"
+                            id="parentCategory"
+                            value={selectedParentId || ''}
+                            onChange={(e) => setSelectedParentId(e.target.value ? Number(e.target.value) : null)}
+                            disabled={loading || !!parentCategoryId}
+                        >
+                            <option value="">🏠 Ana Kategori</option>
+                            {rootCategories.map(cat => (
+                                <option key={cat.id} value={cat.id}>
+                                    📁 {cat.title} altına ekle
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <small style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: '0.25rem', display: 'block' }}>
+                        {selectedParentId ? 'Bu, seçilen kategorinin alt kategorisi olacak' : 'Bu, ana düzey bir kategori olacak'}
+                    </small>
+                </div>
 
                 <div className="form-group">
                     <label htmlFor="title">Başlık</label>
