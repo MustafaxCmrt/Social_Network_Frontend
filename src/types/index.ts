@@ -4,8 +4,8 @@ export interface User {
     lastName: string;
     username: string;
     email: string;
-    role: string;
-    isAdmin: boolean;
+    role: string | number; // Backend'den sayı olarak gelebilir: 0=User, 1=Moderator, 2=Admin
+    isAdmin: boolean; // Deprecated: role kullanın
     isActive: boolean;
     emailVerified: boolean;
     profileImg?: string;

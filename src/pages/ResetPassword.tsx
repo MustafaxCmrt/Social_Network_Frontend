@@ -201,7 +201,7 @@ const ResetPassword: React.FC = () => {
                 {!success && (
                     <form className="auth-form" onSubmit={handleSubmit}>
                         <div className="form-group">
-                            <label htmlFor="newPassword">Yeni Şifre</label>
+                            <label htmlFor="newPassword">Yeni Şifre *</label>
                             <div style={{ position: 'relative' }}>
                                 <input
                                     type={showPasswords.newPassword ? "text" : "password"}
@@ -211,6 +211,7 @@ const ResetPassword: React.FC = () => {
                                     onChange={handleChange}
                                     disabled={loading}
                                     style={{ width: '100%', paddingRight: '2.5rem', boxSizing: 'border-box' }}
+                                    required
                                 />
                                 <button
                                     type="button"
@@ -239,7 +240,7 @@ const ResetPassword: React.FC = () => {
                         </div>
 
                         <div className="form-group">
-                            <label htmlFor="confirmPassword">Yeni Şifre (Tekrar)</label>
+                            <label htmlFor="confirmPassword">Yeni Şifre (Tekrar) *</label>
                             <div style={{ position: 'relative' }}>
                                 <input
                                     type={showPasswords.confirmPassword ? "text" : "password"}
@@ -249,6 +250,7 @@ const ResetPassword: React.FC = () => {
                                     onChange={handleChange}
                                     disabled={loading}
                                     style={{ width: '100%', paddingRight: '2.5rem', boxSizing: 'border-box' }}
+                                    required
                                 />
                                 <button
                                     type="button"

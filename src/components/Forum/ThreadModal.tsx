@@ -131,7 +131,7 @@ export const ThreadModal: React.FC<ThreadModalProps> = ({ isOpen, onClose, onSub
                 {error && <div className="error-message">{error}</div>}
 
                 <div className="form-group">
-                    <label htmlFor="title">Konu Başlığı</label>
+                    <label htmlFor="title">Konu Başlığı *</label>
                     <div className="input-wrapper">
                         <input
                             className="modal-input"
@@ -141,12 +141,13 @@ export const ThreadModal: React.FC<ThreadModalProps> = ({ isOpen, onClose, onSub
                             onChange={(e) => setTitle(e.target.value)}
                             placeholder="Konu başlığı..."
                             disabled={loading}
+                            required
                         />
                     </div>
                 </div>
 
                 <div className="form-group">
-                    <label htmlFor="category">Kategori</label>
+                    <label htmlFor="category">Kategori *</label>
                     <div className="input-wrapper">
                         <select
                             className="modal-input"
@@ -155,6 +156,7 @@ export const ThreadModal: React.FC<ThreadModalProps> = ({ isOpen, onClose, onSub
                             onChange={(e) => setCategoryId(Number(e.target.value))}
                             disabled={loading}
                             style={{ cursor: 'pointer' }}
+                            required
                         >
                             <option value={0} disabled>Kategori Seçiniz</option>
                             {categories.map(cat => {
@@ -171,7 +173,7 @@ export const ThreadModal: React.FC<ThreadModalProps> = ({ isOpen, onClose, onSub
                 </div>
 
                 <div className="form-group">
-                    <label htmlFor="content">İçerik</label>
+                    <label htmlFor="content">İçerik *</label>
                     <div className="input-wrapper">
                         <textarea
                             className="modal-textarea"

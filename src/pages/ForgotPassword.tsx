@@ -42,7 +42,7 @@ const ForgotPassword: React.FC = () => {
 
                 <form className="auth-form" onSubmit={handleSubmit}>
                     <div className="form-group">
-                        <label htmlFor="email">Email</label>
+                        <label htmlFor="email">Email *</label>
                         <input
                             type="email"
                             id="email"
@@ -50,6 +50,7 @@ const ForgotPassword: React.FC = () => {
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
                             disabled={loading || !!message}
+                            required
                         />
                     </div>
 

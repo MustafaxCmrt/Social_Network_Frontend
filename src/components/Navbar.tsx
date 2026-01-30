@@ -9,7 +9,7 @@ import '../styles/Navbar.css';
 
 const Navbar: React.FC = () => {
     const { theme, toggleTheme } = useTheme();
-    const { user, isAuthenticated, logout } = useAuth();
+    const { user, isAuthenticated, logout, isAdminOrModerator } = useAuth();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
 
@@ -476,8 +476,8 @@ const Navbar: React.FC = () => {
                                                     <span>Raporlarım</span>
                                                 </Link>
 
-                                                {/* Admin Panel - Sadece admin kullanıcılar için */}
-                                                {(user.isAdmin || user.role === 'Admin') && (
+                                                {/* Admin Panel - Admin ve Moderatör için */}
+                                                {isAdminOrModerator && (
                                                     <Link
                                                         to="/admin"
                                                         onClick={() => setIsProfileMenuOpen(false)}
@@ -592,8 +592,8 @@ const Navbar: React.FC = () => {
                                     <Flag size={18} />
                                     <span>Raporlarım</span>
                                 </Link>
-                                {/* Admin Panel - Mobil */}
-                                {(user.isAdmin || user.role === 'Admin') && (
+                                {/* Admin Panel - Mobil - Admin ve Moderatör için */}
+                                {isAdminOrModerator && (
                                     <Link
                                         to="/admin"
                                         className="btn-login mobile-btn"

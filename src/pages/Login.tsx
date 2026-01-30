@@ -220,7 +220,7 @@ const Login: React.FC = () => {
 
                         <form className="auth-form" onSubmit={handleSubmit}>
                             <div className="form-group">
-                                <label htmlFor="usernameOrEmail">Kullanici Adi veya Email</label>
+                                <label htmlFor="usernameOrEmail">Kullanici Adi veya Email *</label>
                                 <input
                                     type="text"
                                     id="usernameOrEmail"
@@ -228,11 +228,12 @@ const Login: React.FC = () => {
                                     value={formData.usernameOrEmail}
                                     onChange={handleChange}
                                     disabled={loading}
+                                    required
                                 />
                             </div>
 
                             <div className="form-group">
-                                <label htmlFor="password">Sifre</label>
+                                <label htmlFor="password">Sifre *</label>
                                 <div className="password-input-wrapper">
                                     <input
                                         type={showPassword ? "text" : "password"}

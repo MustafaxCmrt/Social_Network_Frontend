@@ -52,7 +52,7 @@ import '../styles/Admin.css';
 import { Modal } from '../components/UI/Modal';
 
 const AdminPanel: React.FC = () => {
-    const { isAdmin, isAuthenticated, isLoading } = useAuth();
+    const { isAdminOrModerator, isAuthenticated, isLoading } = useAuth();
     const toast = useToast();
     const navigate = useNavigate();
 
@@ -205,41 +205,41 @@ const AdminPanel: React.FC = () => {
 
         if (!isAuthenticated) {
             navigate('/login');
-        } else if (!isAdmin) {
+        } else if (!isAdminOrModerator) {
             navigate('/');
         }
-    }, [isAuthenticated, isAdmin, isLoading, navigate]);
+    }, [isAuthenticated, isAdminOrModerator, isLoading, navigate]);
 
     // Load dashboard data on mount and when topReportedCount changes
     useEffect(() => {
-        if (isAdmin && activeSection === 'dashboard') {
+        if (isAdminOrModerator && activeSection === 'dashboard') {
             loadDashboardData();
         }
-    }, [isAdmin, activeSection, topReportedCount]);
+    }, [isAdminOrModerator, activeSection, topReportedCount]);
 
     // Load audit logs when section changes or page changes
     useEffect(() => {
-        if (isAdmin && activeSection === 'logs') {
+        if (isAdminOrModerator && activeSection === 'logs') {
             loadAuditLogs();
         }
-    }, [isAdmin, activeSection, auditPage, auditFilters]);
+    }, [isAdminOrModerator, activeSection, auditPage, auditFilters]);
 
     // Load reports when section changes or page/filter changes
     useEffect(() => {
-        if (isAdmin && activeSection === 'reports') {
+        if (isAdminOrModerator && activeSection === 'reports') {
             loadReports();
         }
-    }, [isAdmin, activeSection, reportsPage, reportStatusFilter]);
+    }, [isAdminOrModerator, activeSection, reportsPage, reportStatusFilter]);
 
     // Load user profile from URL on page refresh
     useEffect(() => {
-        if (isAdmin && initialSection === 'user-detail') {
+        if (isAdminOrModerator && initialSection === 'user-detail') {
             const userId = searchParams.get('userId');
             if (userId) {
                 loadUserProfileFromUrl(parseInt(userId, 10));
             }
         }
-    }, [isAdmin]);
+    }, [isAdminOrModerator]);
 
     const loadUserProfileFromUrl = async (userId: number) => {
         setViewUserLoading(true);
@@ -962,7 +962,7 @@ const AdminPanel: React.FC = () => {
         return actions[action] || { name: action, color: '#6b7280', icon: <Activity size={16} /> };
     };
 
-    if (!isAdmin) {
+    if (!isAdminOrModerator) {
         return null;
     }
 
@@ -1794,17 +1794,19 @@ const AdminPanel: React.FC = () => {
 
                         <div className="form-row">
                             <div className="form-group">
-                                <label>Rol</label>
+                                <label>Rol *</label>
                                 <select
                                     value={userFormData.role}
                                     onChange={(e) => setUserFormData({ ...userFormData, role: e.target.value })}
+                                    required
                                 >
                                     <option value="User">User</option>
+                                    <option value="Moderator">Moderator</option>
                                     <option value="Admin">Admin</option>
                                 </select>
                             </div>
                             <div className="form-group">
-                                <label>Durum</label>
+                                <label>Durum *</label>
                                 <label className="checkbox-label">
                                     <input
                                         type="checkbox"
@@ -1929,8 +1931,8 @@ const AdminPanel: React.FC = () => {
                             </div>
                             <form onSubmit={handleBanUser} className="action-form">
                                 <div className="form-group">
-                                    <label>Yasaklama Sebebi</label>
-                                    <textarea value={banReason} onChange={(e) => setBanReason(e.target.value)} placeholder="Yasaklama sebebini yazınız..." maxLength={500} rows={3} />
+                                    <label>Yasaklama Sebebi *</label>
+                                    <textarea value={banReason} onChange={(e) => setBanReason(e.target.value)} placeholder="Yasaklama sebebini yazınız..." maxLength={500} rows={3} required />
                                     <span className="char-count">{banReason.length}/500</span>
                                 </div>
                                 <div className="form-row">
@@ -1940,8 +1942,8 @@ const AdminPanel: React.FC = () => {
                                     </label>
                                     {!isPermanentBan && (
                                         <div className="form-group">
-                                            <label>Bitiş Tarihi</label>
-                                            <input type="datetime-local" value={banExpiresAt} onChange={(e) => setBanExpiresAt(e.target.value)} min={getMinDateTime()} />
+                                            <label>Bitiş Tarihi *</label>
+                                            <input type="datetime-local" value={banExpiresAt} onChange={(e) => setBanExpiresAt(e.target.value)} min={getMinDateTime()} required />
                                         </div>
                                     )}
                                 </div>
@@ -2080,12 +2082,12 @@ const AdminPanel: React.FC = () => {
                             </div>
                             <form onSubmit={handleMuteUser} className="action-form">
                                 <div className="form-group">
-                                    <label>Susturma Sebebi</label>
-                                    <textarea value={muteReason} onChange={(e) => setMuteReason(e.target.value)} placeholder="Susturma sebebini yazınız..." maxLength={500} rows={3} />
+                                    <label>Susturma Sebebi *</label>
+                                    <textarea value={muteReason} onChange={(e) => setMuteReason(e.target.value)} placeholder="Susturma sebebini yazınız..." maxLength={500} rows={3} required />
                                     <span className="char-count">{muteReason.length}/500</span>
                                 </div>
                                 <div className="form-group">
-                                    <label>Bitiş Tarihi</label>
+                                    <label>Bitiş Tarihi *</label>
                                     <input type="datetime-local" value={muteExpiresAt} onChange={(e) => setMuteExpiresAt(e.target.value)} min={getMinDateTime()} required />
                                 </div>
                                 <button type="submit" className="btn-warning" disabled={muteLoading || !searchUserId}>
@@ -2560,7 +2562,7 @@ const AdminPanel: React.FC = () => {
                                         <div style={{ display: 'grid', gap: '1.5rem' }}>
                                             <div>
                                                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                                                    Durum
+                                                    Durum *
                                                 </label>
                                                 <select
                                                     value={updateStatusData.status}
@@ -2574,6 +2576,7 @@ const AdminPanel: React.FC = () => {
                                                         color: 'var(--text-primary)',
                                                         fontSize: '1rem'
                                                     }}
+                                                    required
                                                 >
                                                     <option value={ReportStatus.Pending}>Beklemede</option>
                                                     <option value={ReportStatus.Reviewed}>İncelendi</option>

@@ -128,7 +128,7 @@ const Register: React.FC = () => {
                 <form className="auth-form" onSubmit={handleSubmit}>
                     <div style={{ display: 'flex', gap: '1rem' }}>
                         <div className="form-group" style={{ flex: 1 }}>
-                            <label htmlFor="firstName">Ad</label>
+                            <label htmlFor="firstName">Ad *</label>
                             <input
                                 type="text"
                                 id="firstName"
@@ -136,10 +136,11 @@ const Register: React.FC = () => {
                                 value={formData.firstName}
                                 onChange={handleChange}
                                 disabled={loading}
+                                required
                             />
                         </div>
                         <div className="form-group" style={{ flex: 1 }}>
-                            <label htmlFor="lastName">Soyad</label>
+                            <label htmlFor="lastName">Soyad *</label>
                             <input
                                 type="text"
                                 id="lastName"
@@ -147,12 +148,13 @@ const Register: React.FC = () => {
                                 value={formData.lastName}
                                 onChange={handleChange}
                                 disabled={loading}
+                                required
                             />
                         </div>
                     </div>
 
                     <div className="form-group">
-                        <label htmlFor="username">Kullanıcı Adı</label>
+                        <label htmlFor="username">Kullanıcı Adı *</label>
                         <input
                             type="text"
                             id="username"
@@ -160,11 +162,12 @@ const Register: React.FC = () => {
                             value={formData.username}
                             onChange={handleChange}
                             disabled={loading}
+                            required
                         />
                     </div>
 
                     <div className="form-group">
-                        <label htmlFor="email">Email</label>
+                        <label htmlFor="email">Email *</label>
                         <input
                             type="email"
                             id="email"
@@ -172,11 +175,12 @@ const Register: React.FC = () => {
                             value={formData.email}
                             onChange={handleChange}
                             disabled={loading}
+                            required
                         />
                     </div>
 
                     <div className="form-group">
-                        <label htmlFor="password">Şifre</label>
+                        <label htmlFor="password">Şifre *</label>
                         <div className="password-input-wrapper">
                             <input
                                 type={showPassword ? "text" : "password"}
@@ -198,7 +202,7 @@ const Register: React.FC = () => {
                     </div>
 
                     <div className="form-group">
-                        <label htmlFor="confirmPassword">Şifre Tekrar</label>
+                        <label htmlFor="confirmPassword">Şifre Tekrar *</label>
                         <div className="password-input-wrapper">
                             <input
                                 type={showConfirmPassword ? "text" : "password"}
@@ -208,6 +212,7 @@ const Register: React.FC = () => {
                                 onChange={handleChange}
                                 disabled={loading}
                                 style={{ paddingRight: '2.5rem' }}
+                                required
                             />
                             <button
                                 type="button"

@@ -130,7 +130,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 </div>
 
                 <div className="form-group">
-                    <label htmlFor="reason">Rapor Sebebi</label>
+                    <label htmlFor="reason">Rapor Sebebi *</label>
                     <div className="input-wrapper">
                         <select
                             className="modal-input"
@@ -139,6 +139,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                             onChange={(e) => setReason(Number(e.target.value) as ReportReason)}
                             disabled={loading}
                             style={{ cursor: 'pointer' }}
+                            required
                         >
                             {reasons.map(r => (
                                 <option key={r.value} value={r.value}>
@@ -153,7 +154,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                 </div>
 
                 <div className="form-group">
-                    <label htmlFor="description">Açıklama</label>
+                    <label htmlFor="description">Açıklama * (min 10 karakter)</label>
                     <div className="input-wrapper">
                         <textarea
                             className="modal-textarea"

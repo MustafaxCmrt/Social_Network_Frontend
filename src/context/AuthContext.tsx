@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { User, LoginRequest } from '../types';
 import { authService } from '../services/authService';
+import { isAdmin as checkIsAdmin, isModerator as checkIsModerator, isAdminOrModerator as checkIsAdminOrModerator } from '../types/roles';
 
 interface AuthContextType {
     user: User | null;
@@ -10,6 +11,8 @@ interface AuthContextType {
     logout: () => void;
     isAuthenticated: boolean;
     isAdmin: boolean;
+    isModerator: boolean;
+    isAdminOrModerator: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -72,6 +75,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await authService.logout();
     };
 
+    // Debug: Backend'den gelen role değerini göster
+    React.useEffect(() => {
+        if (user) {
+            console.log('🔐 Auth Debug:', {
+                userId: user.userId,
+                username: user.username,
+                role: user.role,
+                roleType: typeof user.role,
+                isAdmin: user.isAdmin,
+                calculated: {
+                    isAdmin: checkIsAdmin(user),
+                    isModerator: checkIsModerator(user),
+                    isAdminOrModerator: checkIsAdminOrModerator(user)
+                }
+            });
+        }
+    }, [user]);
+
     return (
         <AuthContext.Provider value={{
             user,
@@ -79,7 +100,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             login,
             logout,
             isAuthenticated: !!user,
-            isAdmin: user?.isAdmin || user?.role === 'Admin' || false
+            isAdmin: checkIsAdmin(user),
+            isModerator: checkIsModerator(user),
+            isAdminOrModerator: checkIsAdminOrModerator(user)
         }}>
             {children}
         </AuthContext.Provider>

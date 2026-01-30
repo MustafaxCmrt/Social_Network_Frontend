@@ -129,7 +129,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 </div>
 
                 <div className="form-group">
-                    <label htmlFor="title">Başlık</label>
+                    <label htmlFor="title">Başlık *</label>
                     <div className="input-wrapper">
                         <input
                             className="modal-input"
@@ -139,6 +139,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                             onChange={(e) => setTitle(e.target.value)}
                             placeholder="Kategori adı..."
                             disabled={loading}
+                            required
                         />
                     </div>
                 </div>
