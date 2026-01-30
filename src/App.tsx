@@ -15,6 +15,7 @@ import UserProfile from './pages/UserProfile';
 import ThreadDetail from './pages/ThreadDetail';
 import Search from './pages/Search';
 import AdminPanel from './pages/AdminPanel';
+import MyReports from './pages/MyReports';
 import ToastContainer from './components/Toast';
 import './App.css';
 
@@ -38,6 +39,7 @@ function App() {
                 <Route path="/user/:userId" element={<UserProfile />} />
                 <Route path="/search" element={<Search />} />
                 <Route path="/thread/:id" element={<ThreadDetail />} />
+                <Route path="/my-reports" element={<MyReports />} />
                 <Route path="/admin" element={<AdminPanel />} />
               </Routes>
               <ToastContainer />

@@ -68,11 +68,11 @@ export interface TopUser {
 }
 
 export interface TopReported {
-    id: number;
-    type: string;
-    title: string;
+    contentId: number;
+    contentType: string;
+    contentPreview: string;
     reportCount: number;
-    authorUsername: string;
+    lastReportedAt: string;
 }
 
 // ===== Dashboard Service =====

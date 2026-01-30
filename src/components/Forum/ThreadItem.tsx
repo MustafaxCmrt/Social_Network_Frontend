@@ -1,16 +1,17 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Thread } from '../../types/thread';
-import { Edit2, Trash2, Pin, MessageSquare, Eye } from 'lucide-react';
+import { Edit2, Trash2, Pin, MessageSquare, Eye, Flag } from 'lucide-react';
 
 interface ThreadItemProps {
     thread: Thread;
-    currentUserId?: number; // Gelecekte auth user id'si eklenecek
+    currentUserId?: number;
     onEdit?: (thread: Thread) => void;
     onDelete?: (thread: Thread) => void;
+    onReport?: (thread: Thread) => void;
 }
 
-export const ThreadItem: React.FC<ThreadItemProps> = ({ thread, onEdit, onDelete }) => {
+export const ThreadItem: React.FC<ThreadItemProps> = ({ thread, currentUserId, onEdit, onDelete, onReport }) => {
     const navigate = useNavigate();
 
     // API'den gelen user ve category bilgileri
@@ -142,6 +143,27 @@ export const ThreadItem: React.FC<ThreadItemProps> = ({ thread, onEdit, onDelete
                         }}
                     >
                         <Trash2 size={16} />
+                    </button>
+                )}
+                {onReport && currentUserId && thread.userId !== currentUserId && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onReport(thread); }}
+                        className="action-btn-minimal report"
+                        title="Raporla"
+                        style={{
+                            padding: '0.4rem',
+                            borderRadius: '6px',
+                            background: 'var(--bg-card)',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            color: '#ef4444',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        <Flag size={16} />
                     </button>
                 )}
             </div>

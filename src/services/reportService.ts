@@ -1,37 +1,7 @@
 import { api } from './api';
+import type { CreateReportDto, Report, PaginatedReportResponse, UpdateReportStatusDto } from '../types/report';
 
-// Report Types - const objects instead of enums for erasableSyntaxOnly compatibility
-export const ReportType = {
-    THREAD: 'thread',
-    POST: 'post',
-    USER: 'user'
-} as const;
-export type ReportType = typeof ReportType[keyof typeof ReportType];
-
-export const ReportStatus = {
-    PENDING: 'pending',
-    REVIEWED: 'reviewed',
-    RESOLVED: 'resolved',
-    DISMISSED: 'dismissed'
-} as const;
-export type ReportStatus = typeof ReportStatus[keyof typeof ReportStatus];
-
-export interface Report {
-    id: number;
-    reporterId: number;
-    reporterUsername?: string;
-    targetType: ReportType;
-    targetId: number;
-    reason: string;
-    description?: string;
-    status: ReportStatus;
-    reviewedBy?: number;
-    reviewedAt?: string;
-    createdAt: string;
-    updatedAt: string;
-}
-
-export interface ReportResponse {
+export interface AdminReportResponse {
     items: Report[];
     page: number;
     pageSize: number;
@@ -39,53 +9,43 @@ export interface ReportResponse {
     totalPages: number;
 }
 
-// Request DTOs
-export interface CreateReportRequest {
-    targetType: ReportType;
-    targetId: number;
-    reason: string;
-    description?: string;
-}
-
-export interface UpdateReportStatusRequest {
-    status: ReportStatus;
-}
-
-export interface ReportFilterParams {
-    page?: number;
-    pageSize?: number;
-    status?: ReportStatus;
-    targetType?: ReportType;
-}
-
-export interface DeleteResponse {
-    message: string;
-}
-
 export const reportService = {
-    // Tüm raporları getir (Admin)
-    getAll: async (params: ReportFilterParams = {}): Promise<ReportResponse> => {
-        const queryParams = new URLSearchParams();
-        if (params.page) queryParams.append('page', params.page.toString());
-        if (params.pageSize) queryParams.append('pageSize', params.pageSize.toString());
-        if (params.status) queryParams.append('status', params.status);
-        if (params.targetType) queryParams.append('targetType', params.targetType);
-
-        return api.get<ReportResponse>(`/Report?${queryParams.toString()}`);
-    },
-
     // Rapor oluştur
-    create: async (data: CreateReportRequest): Promise<Report> => {
-        return api.post<Report>('/Report', data);
+    create: async (data: CreateReportDto): Promise<Report> => {
+        return await api.post<Report>('/Report', data);
     },
 
-    // Rapor durumunu güncelle (Admin)
-    updateStatus: async (reportId: number, data: UpdateReportStatusRequest): Promise<Report> => {
-        return api.put<Report>(`/Report/${reportId}/status`, data);
+    // Kendi raporlarımı getir
+    getMyReports: async (page: number = 1, pageSize: number = 10): Promise<PaginatedReportResponse> => {
+        return await api.get<PaginatedReportResponse>(`/Report/my?page=${page}&pageSize=${pageSize}`);
     },
 
-    // Rapor sil (Admin)
-    delete: async (reportId: number): Promise<DeleteResponse> => {
-        return api.delete<DeleteResponse>(`/Report/${reportId}`);
+    // Admin: Tüm raporları getir (status filtresi opsiyonel)
+    getAllReports: async (page: number = 1, pageSize: number = 10, status?: number): Promise<AdminReportResponse> => {
+        const params = new URLSearchParams({
+            page: page.toString(),
+            pageSize: pageSize.toString()
+        });
+        
+        if (status !== undefined && status !== 0) {
+            params.append('status', status.toString());
+        }
+
+        return await api.get<AdminReportResponse>(`/Report/all?${params.toString()}`);
+    },
+
+    // Admin: Tek bir raporun detayını getir
+    getById: async (id: number): Promise<Report> => {
+        return await api.get<Report>(`/Report/${id}`);
+    },
+
+    // Admin: Rapor durumunu güncelle
+    updateStatus: async (id: number, data: UpdateReportStatusDto): Promise<Report> => {
+        return await api.put<Report>(`/Report/${id}/status`, data);
+    },
+
+    // Admin: Rapor sil
+    delete: async (id: number): Promise<void> => {
+        return await api.delete<void>(`/Report/delete/${id}`);
     }
 };

@@ -6,10 +6,13 @@ import { moderationService } from '../services/moderationService';
 import { dashboardService } from '../services/dashboardService';
 import { auditLogService } from '../services/auditLogService';
 import { userService } from '../services/userService';
+import { reportService } from '../services/reportService';
 import type { UserBan, UserMute, BanUserRequest, MuteUserRequest, UserSearchResult, ThreadSearchResult } from '../services/moderationService';
-import type { DashboardStats, TopUser } from '../services/dashboardService';
+import type { DashboardStats, TopUser, TopReported } from '../services/dashboardService';
 import type { AuditLogItem, AuditLogFilters } from '../services/auditLogService';
 import type { UserListItem, UserProfile, UserThreadListItem, UserPostListItem } from '../services/userService';
+import type { Report, UpdateReportStatusDto } from '../types/report';
+import { ReportStatus, getReportReasonText, getReportStatusText } from '../types/report';
 import {
     Shield,
     Ban,
@@ -41,7 +44,9 @@ import {
     AlertCircle,
     ChevronDown,
     Pencil,
-    ArrowLeft
+    ArrowLeft,
+    Flag,
+    User
 } from 'lucide-react';
 import '../styles/Admin.css';
 import { Modal } from '../components/UI/Modal';
@@ -53,13 +58,13 @@ const AdminPanel: React.FC = () => {
 
     // URL-based section persistence
     const [searchParams, setSearchParams] = useSearchParams();
-    const initialSection = (searchParams.get('section') as 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs') || 'dashboard';
+    const initialSection = (searchParams.get('section') as 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports') || 'dashboard';
 
     // Sidebar state
-    const [activeSection, setActiveSectionState] = useState<'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs'>(initialSection);
+    const [activeSection, setActiveSectionState] = useState<'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports'>(initialSection);
 
     // Wrapper to update both state and URL
-    const setActiveSection = (section: 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs') => {
+    const setActiveSection = (section: 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports') => {
         setActiveSectionState(section);
         setSearchParams({ section });
     };
@@ -79,6 +84,8 @@ const AdminPanel: React.FC = () => {
     // Dashboard state
     const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
     const [topUsers, setTopUsers] = useState<TopUser[]>([]);
+    const [topReported, setTopReported] = useState<TopReported[]>([]);
+    const [topReportedCount, setTopReportedCount] = useState(10);
     const [dashboardLoading, setDashboardLoading] = useState(false);
 
     // Audit Log state
@@ -92,6 +99,21 @@ const AdminPanel: React.FC = () => {
     const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
     const [cleanupDays, setCleanupDays] = useState(90);
     const [cleanupLoading, setCleanupLoading] = useState(false);
+
+    // Reports state
+    const [reports, setReports] = useState<Report[]>([]);
+    const [reportsPage, setReportsPage] = useState(1);
+    const [reportsTotalPages, setReportsTotalPages] = useState(0);
+    const [reportsTotalCount, setReportsTotalCount] = useState(0);
+    const [reportsLoading, setReportsLoading] = useState(false);
+    const [reportStatusFilter, setReportStatusFilter] = useState<number>(0); // 0 = all
+    const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+    const [isReportDetailModalOpen, setIsReportDetailModalOpen] = useState(false);
+    const [isUpdateStatusModalOpen, setIsUpdateStatusModalOpen] = useState(false);
+    const [updateStatusData, setUpdateStatusData] = useState<UpdateReportStatusDto>({
+        status: ReportStatus.Pending,
+        adminNote: ''
+    });
 
     // User search (legacy - ID based)
     const [searchUserId, setSearchUserId] = useState<string>('');
@@ -174,7 +196,7 @@ const AdminPanel: React.FC = () => {
     const [deleteUserLoading, setDeleteUserLoading] = useState(false);
 
     // Sidebar state
-    const [permissionsExpanded, setPermissionsExpanded] = useState(true);
+    const [permissionsExpanded, setPermissionsExpanded] = useState(false);
 
     // Redirect if not admin
     // Redirect if not admin
@@ -188,12 +210,12 @@ const AdminPanel: React.FC = () => {
         }
     }, [isAuthenticated, isAdmin, isLoading, navigate]);
 
-    // Load dashboard data on mount
+    // Load dashboard data on mount and when topReportedCount changes
     useEffect(() => {
         if (isAdmin && activeSection === 'dashboard') {
             loadDashboardData();
         }
-    }, [isAdmin, activeSection]);
+    }, [isAdmin, activeSection, topReportedCount]);
 
     // Load audit logs when section changes or page changes
     useEffect(() => {
@@ -201,6 +223,13 @@ const AdminPanel: React.FC = () => {
             loadAuditLogs();
         }
     }, [isAdmin, activeSection, auditPage, auditFilters]);
+
+    // Load reports when section changes or page/filter changes
+    useEffect(() => {
+        if (isAdmin && activeSection === 'reports') {
+            loadReports();
+        }
+    }, [isAdmin, activeSection, reportsPage, reportStatusFilter]);
 
     // Load user profile from URL on page refresh
     useEffect(() => {
@@ -228,12 +257,14 @@ const AdminPanel: React.FC = () => {
     const loadDashboardData = async () => {
         setDashboardLoading(true);
         try {
-            const [stats, users] = await Promise.all([
+            const [stats, users, reported] = await Promise.all([
                 dashboardService.getStats(),
-                dashboardService.getTopUsers(5)
+                dashboardService.getTopUsers(5),
+                dashboardService.getTopReported(topReportedCount)
             ]);
             setDashboardStats(stats);
             setTopUsers(users);
+            setTopReported(reported);
         } catch (error: any) {
             toast.error('Hata', error.message || 'Dashboard verileri yüklenemedi.');
         } finally {
@@ -256,6 +287,71 @@ const AdminPanel: React.FC = () => {
             toast.error('Hata', error.message || 'İşlem geçmişi yüklenemedi.');
         } finally {
             setAuditLoading(false);
+        }
+    };
+
+    const loadReports = async () => {
+        setReportsLoading(true);
+        try {
+            const response = await reportService.getAllReports(
+                reportsPage,
+                10,
+                reportStatusFilter === 0 ? undefined : reportStatusFilter
+            );
+            setReports(response.items);
+            setReportsTotalPages(response.totalPages);
+            setReportsTotalCount(response.totalCount);
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Raporlar yüklenemedi.');
+        } finally {
+            setReportsLoading(false);
+        }
+    };
+
+    const handleViewReportDetail = async (report: Report) => {
+        try {
+            const fullReport = await reportService.getById(report.id);
+            setSelectedReport(fullReport);
+            setIsReportDetailModalOpen(true);
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Rapor detayı yüklenemedi.');
+        }
+    };
+
+    const handleOpenUpdateStatus = (report: Report) => {
+        setSelectedReport(report);
+        setUpdateStatusData({
+            status: report.status,
+            adminNote: report.adminNote || ''
+        });
+        setIsUpdateStatusModalOpen(true);
+    };
+
+    const handleUpdateReportStatus = async () => {
+        if (!selectedReport) return;
+
+        try {
+            await reportService.updateStatus(selectedReport.id, updateStatusData);
+            toast.success('Başarılı', 'Rapor durumu güncellendi.');
+            setIsUpdateStatusModalOpen(false);
+            setSelectedReport(null);
+            loadReports();
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Rapor güncellenemedi.');
+        }
+    };
+
+    const handleDeleteReport = async (reportId: number) => {
+        if (!window.confirm('Bu raporu silmek istediğinizden emin misiniz?')) {
+            return;
+        }
+
+        try {
+            await reportService.delete(reportId);
+            toast.success('Başarılı', 'Rapor silindi.');
+            loadReports();
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Rapor silinemedi.');
         }
     };
 
@@ -937,6 +1033,15 @@ const AdminPanel: React.FC = () => {
                             </div>
                         )}
                     </div>
+
+                    <button
+                        className={`sidebar-item ${activeSection === 'reports' ? 'active' : ''}`}
+                        onClick={() => setActiveSection('reports')}
+                    >
+                        <Flag size={20} />
+                        <span>Raporlar</span>
+                    </button>
+
                     <button
                         className={`sidebar-item ${activeSection === 'logs' ? 'active' : ''}`}
                         onClick={() => setActiveSection('logs')}
@@ -1064,6 +1169,127 @@ const AdminPanel: React.FC = () => {
                                                 </div>
                                             ))}
                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* Top Reported */}
+                                <div className="content-card" style={{ marginTop: '1.5rem' }}>
+                                    <div className="card-header" style={{ justifyContent: 'space-between' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                            <AlertTriangle size={20} style={{ color: '#ef4444' }} />
+                                            <h3>En Çok Raporlanan İçerikler</h3>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                            <label style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                Göster:
+                                                <select
+                                                    value={topReportedCount}
+                                                    onChange={(e) => setTopReportedCount(Number(e.target.value))}
+                                                    style={{
+                                                        padding: '0.5rem 0.75rem',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid var(--border-color)',
+                                                        background: 'var(--bg-secondary)',
+                                                        color: 'var(--text-primary)',
+                                                        cursor: 'pointer',
+                                                        fontWeight: '500'
+                                                    }}
+                                                >
+                                                    <option value={5}>5</option>
+                                                    <option value={10}>10</option>
+                                                    <option value={15}>15</option>
+                                                    <option value={20}>20</option>
+                                                </select>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div className="top-reported-list" style={{ padding: '1.5rem' }}>
+                                        {topReported.length === 0 ? (
+                                            <div className="empty-state" style={{ padding: '2rem' }}>
+                                                <Flag size={48} />
+                                                <p>Henüz rapor edilmiş içerik yok.</p>
+                                            </div>
+                                        ) : (
+                                            topReported.map((item, index) => (
+                                                <div
+                                                    key={item.contentId}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '1rem',
+                                                        padding: '1rem',
+                                                        borderBottom: index < topReported.length - 1 ? '1px solid var(--border-color)' : 'none',
+                                                        transition: 'background 0.2s'
+                                                    }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                                >
+                                                    <span
+                                                        className={`rank rank-${index + 1}`}
+                                                        style={{
+                                                            minWidth: '32px',
+                                                            height: '32px',
+                                                            borderRadius: '8px',
+                                                            background: index === 0 ? 'linear-gradient(135deg, #ef4444, #dc2626)' :
+                                                                index === 1 ? 'linear-gradient(135deg, #f59e0b, #d97706)' :
+                                                                    index === 2 ? 'linear-gradient(135deg, #eab308, #ca8a04)' :
+                                                                        'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                                                            color: 'white',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            fontWeight: '700',
+                                                            fontSize: '0.9rem',
+                                                            flexShrink: 0,
+                                                            boxShadow: index < 3 ? '0 2px 8px rgba(239, 68, 68, 0.3)' : 'none'
+                                                        }}
+                                                    >
+                                                        {index + 1}
+                                                    </span>
+                                                    <div style={{
+                                                        width: '40px',
+                                                        height: '40px',
+                                                        borderRadius: '10px',
+                                                        background: 'var(--bg-secondary)',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: 'var(--primary-color)',
+                                                        flexShrink: 0
+                                                    }}>
+                                                        {item.contentType === 'User' ? <User size={20} /> :
+                                                            item.contentType === 'Post' ? <MessageSquare size={20} /> :
+                                                                <FileText size={20} />}
+                                                    </div>
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
+                                                            {item.contentPreview}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                                            {item.contentType === 'User' ? 'Kullanıcı' :
+                                                                item.contentType === 'Post' ? 'Gönderi' :
+                                                                    'Konu'} • {new Date(item.lastReportedAt).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
+                                                    </div>
+                                                    <div style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.5rem',
+                                                        padding: '0.5rem 1rem',
+                                                        borderRadius: '8px',
+                                                        background: 'rgba(239, 68, 68, 0.1)',
+                                                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                                                        color: '#ef4444',
+                                                        fontWeight: '700',
+                                                        fontSize: '0.9rem',
+                                                        flexShrink: 0
+                                                    }}>
+                                                        <Flag size={16} />
+                                                        {item.reportCount}
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
                                     </div>
                                 </div>
 
@@ -2015,6 +2241,393 @@ const AdminPanel: React.FC = () => {
                 }
 
                 {/* Audit Log Section */}
+                {
+                    activeSection === 'reports' && (
+                        <div className="admin-section">
+                            <div className="section-header">
+                                <h1><Flag size={28} /> Rapor Yönetimi</h1>
+                                <p>Kullanıcı raporlarını incele ve yönet</p>
+                            </div>
+
+                            <div className="content-card">
+                                <div className="card-header" style={{ justifyContent: 'space-between' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                        <Flag size={20} />
+                                        <h3>Raporlar</h3>
+                                    </div>
+                                    <div className="header-actions" style={{ gap: '1.5rem', alignItems: 'center' }}>
+                                        <select
+                                            value={reportStatusFilter}
+                                            onChange={(e) => {
+                                                setReportStatusFilter(Number(e.target.value));
+                                                setReportsPage(1);
+                                            }}
+                                            style={{
+                                                padding: '0.65rem 1.25rem',
+                                                borderRadius: '10px',
+                                                border: '1px solid var(--border-color)',
+                                                background: 'var(--bg-secondary)',
+                                                color: 'var(--text-primary)',
+                                                cursor: 'pointer',
+                                                fontSize: '0.9rem',
+                                                fontWeight: '500'
+                                            }}
+                                        >
+                                            <option value={0}>Tüm Durumlar</option>
+                                            <option value={ReportStatus.Pending}>Beklemede</option>
+                                            <option value={ReportStatus.Reviewed}>İncelendi</option>
+                                            <option value={ReportStatus.Resolved}>Çözüldü</option>
+                                            <option value={ReportStatus.Rejected}>Reddedildi</option>
+                                        </select>
+                                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', fontWeight: '600', minWidth: '80px', textAlign: 'right' }}>
+                                            {reportsTotalCount} rapor
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {reportsLoading ? (
+                                    <div className="loading-state">
+                                        <Activity size={24} className="spinner" />
+                                        <p>Raporlar yükleniyor...</p>
+                                    </div>
+                                ) : reports.length === 0 ? (
+                                    <div className="empty-state">
+                                        <Flag size={48} />
+                                        <h3>Rapor Bulunamadı</h3>
+                                        <p>Seçili filtreye göre rapor bulunmuyor.</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="reports-grid">
+                                            {reports.map((report, index) => (
+                                                <div key={report.id} className="report-card">
+                                                    <div className="report-card-header">
+                                                        <div className="report-number">
+                                                            <span className="number-badge">#{(reportsPage - 1) * 10 + index + 1}</span>
+                                                        </div>
+                                                        <div className="report-status-badge">
+                                                            <span
+                                                                className={`status-pill ${
+                                                                    report.status === ReportStatus.Pending ? 'status-pending' :
+                                                                    report.status === ReportStatus.Reviewed ? 'status-reviewed' :
+                                                                    report.status === ReportStatus.Resolved ? 'status-resolved' :
+                                                                    'status-rejected'
+                                                                }`}
+                                                            >
+                                                                {getReportStatusText(report.status)}
+                                                            </span>
+                                                        </div>
+                                                        <div className="report-actions">
+                                                            <button
+                                                                className="btn-icon btn-view"
+                                                                onClick={() => handleViewReportDetail(report)}
+                                                                title="Detay"
+                                                            >
+                                                                <Eye size={16} />
+                                                            </button>
+                                                            <button
+                                                                className="btn-icon btn-edit"
+                                                                onClick={() => handleOpenUpdateStatus(report)}
+                                                                title="Durumu Güncelle"
+                                                            >
+                                                                <Pencil size={16} />
+                                                            </button>
+                                                            <button
+                                                                className="btn-icon btn-delete"
+                                                                onClick={() => handleDeleteReport(report.id)}
+                                                                title="Sil"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="report-card-body">
+                                                        <div className="report-row">
+                                                            <div className="report-label">
+                                                                <User size={14} />
+                                                                <span>Raporlayan</span>
+                                                            </div>
+                                                            <div className="report-value">
+                                                                @{report.reporterUsername || 'Bilinmiyor'}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="report-row">
+                                                            <div className="report-label">
+                                                                <Flag size={14} />
+                                                                <span>Tip</span>
+                                                            </div>
+                                                            <div className="report-value">
+                                                                <span className="type-badge">
+                                                                    {(() => {
+                                                                        const type = (report as any).reportedType;
+                                                                        if (type === 'User') return 'Kullanıcı';
+                                                                        if (type === 'Post') return 'Gönderi';
+                                                                        if (type === 'Thread') return 'Konu';
+                                                                        // Fallback
+                                                                        if (report.reportedUserId) return 'Kullanıcı';
+                                                                        if (report.reportedPostId) return 'Gönderi';
+                                                                        if (report.reportedThreadId) return 'Konu';
+                                                                        return '-';
+                                                                    })()}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="report-row">
+                                                            <div className="report-label">
+                                                                <AlertTriangle size={14} />
+                                                                <span>Hedef</span>
+                                                            </div>
+                                                            <div className="report-value target-name">
+                                                                {(report as any).reportedInfo || 
+                                                                    report.reportedUsername || 
+                                                                    report.postTitle || 
+                                                                    report.threadTitle || '-'}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="report-row">
+                                                            <div className="report-label">
+                                                                <XCircle size={14} />
+                                                                <span>Sebep</span>
+                                                            </div>
+                                                            <div className="report-value">
+                                                                <span className="reason-badge">
+                                                                    {getReportReasonText(report.reason)}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="report-row">
+                                                            <div className="report-label">
+                                                                <Clock size={14} />
+                                                                <span>Tarih</span>
+                                                            </div>
+                                                            <div className="report-value report-date">
+                                                                {new Date(report.createdAt).toLocaleDateString('tr-TR', {
+                                                                    day: '2-digit',
+                                                                    month: 'short',
+                                                                    year: 'numeric',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {reportsTotalPages > 1 && (
+                                            <div className="pagination">
+                                                <button
+                                                    className="btn-secondary"
+                                                    onClick={() => setReportsPage(reportsPage - 1)}
+                                                    disabled={reportsPage === 1}
+                                                >
+                                                    <ChevronLeft size={16} />
+                                                    Önceki
+                                                </button>
+                                                <span className="pagination-info">
+                                                    Sayfa {reportsPage} / {reportsTotalPages}
+                                                </span>
+                                                <button
+                                                    className="btn-secondary"
+                                                    onClick={() => setReportsPage(reportsPage + 1)}
+                                                    disabled={reportsPage === reportsTotalPages}
+                                                >
+                                                    Sonraki
+                                                    <ChevronRight size={16} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Report Detail Modal */}
+                            {isReportDetailModalOpen && selectedReport && (
+                                <Modal isOpen={isReportDetailModalOpen} onClose={() => setIsReportDetailModalOpen(false)} title="Rapor Detayları">
+                                    <div style={{ padding: '1rem' }}>
+                                        <div style={{ display: 'grid', gap: '1.5rem' }}>
+                                            <div style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: '140px 1fr',
+                                                gap: '1rem',
+                                                paddingBottom: '1rem',
+                                                borderBottom: '1px solid var(--border-color)'
+                                            }}>
+                                                <strong>Raporlayan:</strong>
+                                                <span>@{selectedReport.reporterUsername} ({selectedReport.reporterEmail})</span>
+
+                                                <strong>Rapor Tipi:</strong>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                                    {selectedReport.reportedUserId && (
+                                                        <span>Kullanıcı: <strong>@{selectedReport.reportedUsername}</strong></span>
+                                                    )}
+                                                    {selectedReport.reportedPostId && (
+                                                        <span>Gönderi: <strong>{selectedReport.postTitle}</strong></span>
+                                                    )}
+                                                    {selectedReport.reportedThreadId && (
+                                                        <span>Konu: <strong>{selectedReport.threadTitle}</strong></span>
+                                                    )}
+                                                </div>
+
+                                                <strong>Sebep:</strong>
+                                                <span className="badge badge-warning">{getReportReasonText(selectedReport.reason)}</span>
+
+                                                <strong>Durum:</strong>
+                                                <span
+                                                    className="badge"
+                                                    style={{
+                                                        background: selectedReport.status === ReportStatus.Pending ? 'rgba(245, 158, 11, 0.1)' :
+                                                            selectedReport.status === ReportStatus.Reviewed ? 'rgba(59, 130, 246, 0.1)' :
+                                                                selectedReport.status === ReportStatus.Resolved ? 'rgba(16, 185, 129, 0.1)' :
+                                                                    'rgba(239, 68, 68, 0.1)',
+                                                        color: selectedReport.status === ReportStatus.Pending ? '#f59e0b' :
+                                                            selectedReport.status === ReportStatus.Reviewed ? '#3b82f6' :
+                                                                selectedReport.status === ReportStatus.Resolved ? '#10b981' :
+                                                                    '#ef4444'
+                                                    }}
+                                                >
+                                                    {getReportStatusText(selectedReport.status)}
+                                                </span>
+
+                                                <strong>Rapor Tarihi:</strong>
+                                                <span>
+                                                    {new Date(selectedReport.createdAt).toLocaleString('tr-TR')}
+                                                </span>
+                                            </div>
+
+                                            <div>
+                                                <strong style={{ display: 'block', marginBottom: '0.5rem' }}>Açıklama:</strong>
+                                                <div style={{
+                                                    background: 'var(--bg-secondary)',
+                                                    padding: '1rem',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid var(--border-color)',
+                                                    lineHeight: '1.6'
+                                                }}>
+                                                    {selectedReport.description || 'Açıklama yok'}
+                                                </div>
+                                            </div>
+
+                                            {selectedReport.adminNote && (
+                                                <div>
+                                                    <strong style={{ display: 'block', marginBottom: '0.5rem' }}>Admin Notu:</strong>
+                                                    <div style={{
+                                                        background: 'rgba(59, 130, 246, 0.1)',
+                                                        padding: '1rem',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                                                        lineHeight: '1.6'
+                                                    }}>
+                                                        {selectedReport.adminNote}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {selectedReport.reviewedAt && (
+                                                <div style={{
+                                                    display: 'grid',
+                                                    gridTemplateColumns: '140px 1fr',
+                                                    gap: '1rem',
+                                                    paddingTop: '1rem',
+                                                    borderTop: '1px solid var(--border-color)'
+                                                }}>
+                                                    <strong>İnceleme Tarihi:</strong>
+                                                    <span>{new Date(selectedReport.reviewedAt).toLocaleString('tr-TR')}</span>
+
+                                                    {selectedReport.reviewedByUsername && (
+                                                        <>
+                                                            <strong>İnceleyen Admin:</strong>
+                                                            <span>@{selectedReport.reviewedByUsername}</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </Modal>
+                            )}
+
+                            {/* Update Status Modal */}
+                            {isUpdateStatusModalOpen && selectedReport && (
+                                <Modal isOpen={isUpdateStatusModalOpen} onClose={() => setIsUpdateStatusModalOpen(false)} title="Rapor Durumunu Güncelle">
+                                    <div style={{ padding: '1rem' }}>
+                                        <div style={{ display: 'grid', gap: '1.5rem' }}>
+                                            <div>
+                                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                                                    Durum
+                                                </label>
+                                                <select
+                                                    value={updateStatusData.status}
+                                                    onChange={(e) => setUpdateStatusData({ ...updateStatusData, status: Number(e.target.value) as ReportStatus })}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.75rem',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid var(--border-color)',
+                                                        background: 'var(--bg-secondary)',
+                                                        color: 'var(--text-primary)',
+                                                        fontSize: '1rem'
+                                                    }}
+                                                >
+                                                    <option value={ReportStatus.Pending}>Beklemede</option>
+                                                    <option value={ReportStatus.Reviewed}>İncelendi</option>
+                                                    <option value={ReportStatus.Resolved}>Çözüldü</option>
+                                                    <option value={ReportStatus.Rejected}>Reddedildi</option>
+                                                </select>
+                                            </div>
+
+                                            <div>
+                                                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
+                                                    Admin Notu (Opsiyonel)
+                                                </label>
+                                                <textarea
+                                                    value={updateStatusData.adminNote}
+                                                    onChange={(e) => setUpdateStatusData({ ...updateStatusData, adminNote: e.target.value })}
+                                                    placeholder="İnceleme sonucunuz ve aldığınız aksiyonlar hakkında not..."
+                                                    rows={4}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.75rem',
+                                                        borderRadius: '8px',
+                                                        border: '1px solid var(--border-color)',
+                                                        background: 'var(--bg-secondary)',
+                                                        color: 'var(--text-primary)',
+                                                        fontSize: '1rem',
+                                                        fontFamily: 'inherit',
+                                                        resize: 'vertical'
+                                                    }}
+                                                />
+                                            </div>
+
+                                            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+                                                <button
+                                                    className="btn-secondary"
+                                                    onClick={() => setIsUpdateStatusModalOpen(false)}
+                                                >
+                                                    İptal
+                                                </button>
+                                                <button
+                                                    className="btn-primary"
+                                                    onClick={handleUpdateReportStatus}
+                                                >
+                                                    <CheckCircle size={16} />
+                                                    Güncelle
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Modal>
+                            )}
+                        </div>
+                    )
+                }
+
                 {
                     activeSection === 'logs' && (
                         <div className="admin-section">

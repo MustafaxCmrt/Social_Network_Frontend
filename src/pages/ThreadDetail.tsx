@@ -7,11 +7,12 @@ import type { Post } from '../types/post';
 import {
     Pin, MessageSquare, Eye, ArrowLeft, Send, User, Calendar,
     ThumbsUp, CheckCircle, Image, Reply, ChevronDown, ChevronUp, X,
-    Edit2, Trash2
+    Edit2, Trash2, Flag
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import '../styles/Home.css';
 import { useAuth } from '../context/AuthContext';
+import { ReportModal } from '../components/Forum/ReportModal';
 
 const ThreadDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -44,6 +45,15 @@ const ThreadDetail: React.FC = () => {
     const [editingPostId, setEditingPostId] = useState<number | null>(null);
     const [editContent, setEditContent] = useState('');
     const [deletingPostId, setDeletingPostId] = useState<number | null>(null);
+
+    // Report state
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [reportTarget, setReportTarget] = useState<{
+        threadId?: number;
+        postId?: number;
+        userId?: number;
+        name?: string;
+    }>({});
 
     // TODO: Current user ID - bunu AuthContext'ten al
     const { user } = useAuth();
@@ -440,6 +450,19 @@ const ThreadDetail: React.FC = () => {
 
     return (
         <div className="home-container">
+            {/* Report Modal */}
+            <ReportModal
+                isOpen={isReportModalOpen}
+                onClose={() => {
+                    setIsReportModalOpen(false);
+                    setReportTarget({});
+                }}
+                reportedUserId={reportTarget.userId}
+                reportedPostId={reportTarget.postId}
+                reportedThreadId={reportTarget.threadId}
+                targetName={reportTarget.name}
+            />
+
             {/* Header Navigation */}
             <div className="page-header">
                 <button onClick={handleBack} className="back-btn">
@@ -506,6 +529,36 @@ const ThreadDetail: React.FC = () => {
                                     {thread.postCount || posts.length}
                                 </span>
                             </div>
+                            {currentUserId && currentUserId !== thread.userId && (
+                                <button
+                                    onClick={() => {
+                                        setReportTarget({
+                                            threadId: thread.id,
+                                            name: thread.title
+                                        });
+                                        setIsReportModalOpen(true);
+                                    }}
+                                    className="stat-pill"
+                                    style={{
+                                        cursor: 'pointer',
+                                        color: '#ef4444',
+                                        borderColor: 'rgba(239, 68, 68, 0.3)',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                                        e.currentTarget.style.borderColor = '#ef4444';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = '';
+                                        e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                                    }}
+                                    title="Konuyu Raporla"
+                                >
+                                    <Flag size={16} />
+                                    Raporla
+                                </button>
+                            )}
                         </div>
                     </article>
 
@@ -718,6 +771,26 @@ const ThreadDetail: React.FC = () => {
                                                         Sil
                                                     </button>
                                                 </>
+                                            )}
+
+                                            {/* Rapor Et - kendi yorumu değilse */}
+                                            {currentUserId && post.userId !== currentUserId && (
+                                                <button
+                                                    className="action-btn"
+                                                    onClick={() => {
+                                                        setReportTarget({
+                                                            postId: post.id,
+                                                            userId: post.userId,
+                                                            name: `@${post.user?.username || 'Kullanıcı'}'nın yorumu`
+                                                        });
+                                                        setIsReportModalOpen(true);
+                                                    }}
+                                                    style={{ color: '#ef4444' }}
+                                                    title="Yorumu Raporla"
+                                                >
+                                                    <Flag size={14} />
+                                                    Raporla
+                                                </button>
                                             )}
                                         </div>
 

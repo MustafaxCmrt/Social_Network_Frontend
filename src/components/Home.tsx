@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import '../styles/Home.css';
-import { CategoryCard, ThreadItem } from './Forum';
+import { CategoryCard, ThreadItem, ReportModal } from './Forum';
 import type { Category, CreateCategoryDto, UpdateCategoryDto } from '../types/category';
 import { categoryService } from '../services/categoryService';
 import { CategoryModal } from './Forum/CategoryModal';
@@ -9,6 +9,7 @@ import { ThreadModal } from './Forum/ThreadModal';
 import { DeleteConfirmModal } from './Forum/DeleteConfirmModal';
 import type { Thread, CreateThreadDto, UpdateThreadDto } from '../types/thread';
 import { threadService } from '../services/threadService';
+import { useAuth } from '../context/AuthContext';
 
 // Tree yapısını düz listeye çevir
 const flattenTree = (categories: Category[]): Category[] => {
@@ -28,6 +29,9 @@ const flattenTree = (categories: Category[]): Category[] => {
 };
 
 const Home: React.FC = () => {
+    const { user } = useAuth();
+    const currentUserId = user?.userId;
+
     const [categories, setCategories] = useState<Category[]>([]);
     const [allCategories, setAllCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
@@ -44,6 +48,13 @@ const Home: React.FC = () => {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
     const [parentCategoryIdForNew, setParentCategoryIdForNew] = useState<number | null>(null);
+
+    // Report State
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [reportTarget, setReportTarget] = useState<{
+        threadId?: number;
+        name?: string;
+    }>({});
 
     const fetchCategories = async (page: number = 1) => {
         try {
@@ -169,6 +180,14 @@ const Home: React.FC = () => {
         setIsDeleteThreadModalOpen(true);
     };
 
+    const handleReportThread = (thread: Thread) => {
+        setReportTarget({
+            threadId: thread.id,
+            name: thread.title
+        });
+        setIsReportModalOpen(true);
+    };
+
     const handleThreadModalSubmit = async (data: CreateThreadDto | UpdateThreadDto) => {
         if ('id' in data) {
             await threadService.update(data as UpdateThreadDto);
@@ -231,6 +250,16 @@ const Home: React.FC = () => {
                 onClose={() => setIsDeleteThreadModalOpen(false)}
                 onConfirm={handleConfirmThreadDelete}
                 itemName={selectedThread?.title || ''}
+            />
+
+            <ReportModal
+                isOpen={isReportModalOpen}
+                onClose={() => {
+                    setIsReportModalOpen(false);
+                    setReportTarget({});
+                }}
+                reportedThreadId={reportTarget.threadId}
+                targetName={reportTarget.name}
             />
 
             {/* Main Forum Layout */}
@@ -362,8 +391,10 @@ const Home: React.FC = () => {
                                 <ThreadItem
                                     key={thread.id}
                                     thread={thread}
+                                    currentUserId={currentUserId}
                                     onEdit={handleEditThread}
                                     onDelete={handleDeleteThread}
+                                    onReport={handleReportThread}
                                 />
                             ))
                         )}

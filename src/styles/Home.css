@@ -1805,6 +1805,19 @@ body.modal-open {
     border-color: #ef4444;
 }
 
+/* Report Button */
+.comment-actions .action-btn:has(svg[data-lucide="flag"]),
+.comment-actions .action-btn[title*="Raporla"] {
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+.comment-actions .action-btn:has(svg[data-lucide="flag"]):hover,
+.comment-actions .action-btn[title*="Raporla"]:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: #ef4444;
+}
+
 /* Mobile: always show edit/delete */
 @media (max-width: 768px) {
     .comment-actions .action-btn.edit,

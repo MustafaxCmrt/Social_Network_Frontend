@@ -1,15 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { userService, type UserProfile as UserProfileType } from '../services/userService';
-import { Calendar, MessageSquare, FileText, ArrowLeft, UserX } from 'lucide-react';
-import '../styles/Home.css'; // Reusing general styles
+import { Calendar, MessageSquare, FileText, ArrowLeft, UserX, Flag } from 'lucide-react';
+import '../styles/Home.css';
+import { ReportModal } from '../components/Forum/ReportModal';
+import { useAuth } from '../context/AuthContext';
 
 const UserProfile: React.FC = () => {
     const { userId } = useParams<{ userId: string }>();
     const navigate = useNavigate();
+    const { user } = useAuth();
+    const currentUserId = user?.userId;
+
     const [profile, setProfile] = useState<UserProfileType | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -77,6 +83,14 @@ const UserProfile: React.FC = () => {
 
     return (
         <div className="home-container">
+            {/* Report Modal */}
+            <ReportModal
+                isOpen={isReportModalOpen}
+                onClose={() => setIsReportModalOpen(false)}
+                reportedUserId={Number(userId)}
+                targetName={`@${profile?.username || 'Kullanıcı'}`}
+            />
+
             <div className="page-header">
                 <button onClick={handleBack} className="back-btn">
                     <ArrowLeft size={18} />
@@ -126,12 +140,43 @@ const UserProfile: React.FC = () => {
 
                         {/* User Info */}
                         <div style={{ marginTop: '1rem' }}>
-                            <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--text-primary)', margin: 0 }}>
-                                {profile.firstName} {profile.lastName}
-                            </h1>
-                            <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', marginTop: '0.25rem' }}>
-                                @{profile.username}
-                            </p>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                <div>
+                                    <h1 style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--text-primary)', margin: 0 }}>
+                                        {profile.firstName} {profile.lastName}
+                                    </h1>
+                                    <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', marginTop: '0.25rem' }}>
+                                        @{profile.username}
+                                    </p>
+                                </div>
+                                
+                                {/* Rapor Et Butonu - kendi profilinde değilse */}
+                                {currentUserId && currentUserId !== Number(userId) && (
+                                    <button
+                                        onClick={() => setIsReportModalOpen(true)}
+                                        className="stat-pill"
+                                        style={{
+                                            cursor: 'pointer',
+                                            color: '#ef4444',
+                                            borderColor: 'rgba(239, 68, 68, 0.3)',
+                                            transition: 'all 0.2s',
+                                            marginTop: '0.5rem'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                                            e.currentTarget.style.borderColor = '#ef4444';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.background = '';
+                                            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                                        }}
+                                        title="Kullanıcıyı Raporla"
+                                    >
+                                        <Flag size={16} />
+                                        Raporla
+                                    </button>
+                                )}
+                            </div>
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
                                 <Calendar size={16} />

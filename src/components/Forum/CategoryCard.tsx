@@ -29,7 +29,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
     onAddSubcategory,
     level = 0 
 }) => {
-    const [isExpanded, setIsExpanded] = useState(true);
+    const [isExpanded, setIsExpanded] = useState(false);
     const hasSubcategories = category.subCategories && category.subCategories.length > 0;
     
     // Kategori ID'sine göre renk seç

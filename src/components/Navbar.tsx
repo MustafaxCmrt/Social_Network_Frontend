@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { Sun, Moon, Menu, X, LogOut, Settings, ChevronDown, Search, Bell, CheckCheck, Trash2, Shield } from 'lucide-react';
+import { Sun, Moon, Menu, X, LogOut, Settings, ChevronDown, Search, Bell, CheckCheck, Trash2, Shield, Flag } from 'lucide-react';
 import { notificationService } from '../services/notificationService';
 import type { Notification } from '../types/notification';
 import '../styles/Navbar.css';
@@ -455,6 +455,27 @@ const Navbar: React.FC = () => {
                                                     <span>Profil Ayarları</span>
                                                 </Link>
 
+                                                {/* Raporlarım */}
+                                                <Link
+                                                    to="/my-reports"
+                                                    onClick={() => setIsProfileMenuOpen(false)}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.75rem',
+                                                        padding: '0.75rem 1rem',
+                                                        color: 'var(--text-primary)',
+                                                        textDecoration: 'none',
+                                                        borderRadius: '8px',
+                                                        transition: 'background 0.2s'
+                                                    }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                                >
+                                                    <Flag size={18} />
+                                                    <span>Raporlarım</span>
+                                                </Link>
+
                                                 {/* Admin Panel - Sadece admin kullanıcılar için */}
                                                 {(user.isAdmin || user.role === 'Admin') && (
                                                     <Link
@@ -551,6 +572,25 @@ const Navbar: React.FC = () => {
                                 </div>
                                 <Link to="/profile" className="btn-login mobile-btn" style={{ marginBottom: '0.5rem', textAlign: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
                                     Profil Ayarları
+                                </Link>
+                                {/* Raporlarım - Mobil */}
+                                <Link
+                                    to="/my-reports"
+                                    className="btn-login mobile-btn"
+                                    style={{
+                                        marginBottom: '0.5rem',
+                                        textAlign: 'center',
+                                        justifyContent: 'center',
+                                        background: 'rgba(239, 68, 68, 0.05)',
+                                        border: '1px solid rgba(239, 68, 68, 0.2)',
+                                        color: '#ef4444',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem'
+                                    }}
+                                >
+                                    <Flag size={18} />
+                                    <span>Raporlarım</span>
                                 </Link>
                                 {/* Admin Panel - Mobil */}
                                 {(user.isAdmin || user.role === 'Admin') && (
