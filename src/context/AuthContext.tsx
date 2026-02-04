@@ -36,11 +36,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 try {
                     const userData = await authService.getCurrentUser();
                     setUser(userData);
-                } catch (error) {
+                } catch (error: any) {
                     console.error('Failed to fetch user', error);
-                    // Invalid token? Clear it.
-                    localStorage.removeItem('accessToken');
-                    localStorage.removeItem('refreshToken');
+                    
+                    // Try to refresh token if it's a 401 error
+                    const refreshToken = localStorage.getItem('refreshToken');
+                    if (refreshToken && (error.message?.includes('401') || error.message?.includes('Unauthorized'))) {
+                        try {
+                            console.log('Attempting to refresh token...');
+                            const refreshResponse = await authService.refreshToken(refreshToken);
+                            
+                            if (refreshResponse.accessToken && refreshResponse.refreshToken) {
+                                localStorage.setItem('accessToken', refreshResponse.accessToken);
+                                localStorage.setItem('refreshToken', refreshResponse.refreshToken);
+                                
+                                // Try to get user again with new token
+                                const userData = await authService.getCurrentUser();
+                                setUser(userData);
+                                return;
+                            }
+                        } catch (refreshError) {
+                            console.error('Token refresh failed:', refreshError);
+                            // Refresh failed - clear tokens and logout
+                            localStorage.removeItem('accessToken');
+                            localStorage.removeItem('refreshToken');
+                        }
+                    } else {
+                        // Not a 401 or no refresh token - clear tokens
+                        localStorage.removeItem('accessToken');
+                        localStorage.removeItem('refreshToken');
+                    }
                 }
             }
             setIsLoading(false);
