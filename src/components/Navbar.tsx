@@ -332,8 +332,13 @@ const Navbar: React.FC = () => {
                                                                 </div>
                                                                 <div className="notif-content">
                                                                     <div className="notif-title">{notif.title}</div>
-                                                                    <div className="notif-message">{notif.message}</div>
-                                                                    <div className="notif-time">{new Date(notif.createdAt).toLocaleDateString()}</div>
+                                                                    <div className="notif-message">{notif.message || ''}</div>
+                                                                    <div className="notif-time">{new Date(notif.createdAt).toLocaleDateString('tr-TR', { 
+                                                                        day: 'numeric', 
+                                                                        month: 'short', 
+                                                                        hour: '2-digit', 
+                                                                        minute: '2-digit' 
+                                                                    })}</div>
                                                                 </div>
                                                                 <div className="notif-actions">
                                                                     {!notif.isRead && (

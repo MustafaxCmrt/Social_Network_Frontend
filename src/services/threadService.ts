@@ -18,6 +18,24 @@ export const threadService = {
         return await api.get<ThreadResponse>(`/Thread/getAll?${queryParams.toString()}`);
     },
 
+    /**
+     * Get threads for a specific club
+     * GET /api/Thread/club/{clubId}/getAll
+     */
+    getClubThreads: async (clubId: number, params: Omit<ThreadFilterParams, 'clubId'> = {}): Promise<ThreadResponse> => {
+        const queryParams = new URLSearchParams();
+        if (params.page) queryParams.append('page', params.page.toString());
+        if (params.pageSize) queryParams.append('pageSize', params.pageSize.toString());
+        if (params.q) queryParams.append('q', params.q);
+        if (params.categoryId) queryParams.append('categoryId', params.categoryId.toString());
+        if (params.isSolved !== undefined) queryParams.append('isSolved', params.isSolved.toString());
+        if (params.userId) queryParams.append('userId', params.userId.toString());
+        if (params.sortBy) queryParams.append('sortBy', params.sortBy);
+        if (params.sortDir) queryParams.append('sortDir', params.sortDir);
+
+        return await api.get<ThreadResponse>(`/Thread/club/${clubId}/getAll?${queryParams.toString()}`);
+    },
+
     getById: async (id: number): Promise<Thread> => {
         return await api.get<Thread>(`/Thread/get/${id}`);
     },

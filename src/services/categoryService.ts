@@ -64,5 +64,21 @@ export const categoryService = {
 
     getRootCategories: async (): Promise<Category[]> => {
         return await api.get<Category[]>('/Category/root');
+    },
+
+    /**
+     * Get categories for a specific club
+     * GET /api/Category/club/{clubId}
+     */
+    getClubCategories: async (clubId: number): Promise<Category[]> => {
+        return await api.get<Category[]>(`/Category/club/${clubId}`);
+    },
+
+    /**
+     * Create a category for a specific club
+     * POST /api/Category/club/{clubId}
+     */
+    createClubCategory: async (clubId: number, data: CreateCategoryDto): Promise<void> => {
+        await api.post(`/Category/club/${clubId}`, data);
     }
 };

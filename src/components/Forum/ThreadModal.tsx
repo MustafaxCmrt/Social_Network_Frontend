@@ -11,6 +11,7 @@ interface ThreadModalProps {
     onClose: () => void;
     onSubmit: (data: CreateThreadDto | UpdateThreadDto) => Promise<void>;
     editThread?: Thread | null;
+    clubId?: number | null; // Kulüp ID'si (varsa kulüp kategorileri gösterilir)
 }
 
 interface FlatCategory extends Category {
@@ -32,7 +33,7 @@ const flattenCategories = (categories: Category[], level: number = 0): FlatCateg
     return result;
 };
 
-export const ThreadModal: React.FC<ThreadModalProps> = ({ isOpen, onClose, onSubmit, editThread }) => {
+export const ThreadModal: React.FC<ThreadModalProps> = ({ isOpen, onClose, onSubmit, editThread, clubId }) => {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [categoryId, setCategoryId] = useState<number>(0);
@@ -42,11 +43,21 @@ export const ThreadModal: React.FC<ThreadModalProps> = ({ isOpen, onClose, onSub
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        // Fetch tree and flatten for the select box
+        // Fetch categories - kulüp kategorileri veya genel kategoriler
         const loadCategories = async () => {
             try {
-                const treeData = await categoryService.getTree();
-                const flatData = flattenCategories(treeData);
+                let categoryData: Category[];
+                
+                if (clubId) {
+                    // Kulüp kategorilerini yükle
+                    categoryData = await categoryService.getClubCategories(clubId);
+                } else {
+                    // Genel kategorileri yükle
+                    const treeData = await categoryService.getTree();
+                    categoryData = treeData;
+                }
+                
+                const flatData = flattenCategories(categoryData);
                 setCategories(flatData);
                 if (flatData.length > 0 && !editThread) {
                     setCategoryId(flatData[0].id);
@@ -59,7 +70,7 @@ export const ThreadModal: React.FC<ThreadModalProps> = ({ isOpen, onClose, onSub
         if (isOpen) {
             loadCategories();
         }
-    }, [isOpen, editThread]);
+    }, [isOpen, editThread, clubId]);
 
     useEffect(() => {
         if (editThread) {

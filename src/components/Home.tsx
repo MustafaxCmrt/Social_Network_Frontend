@@ -68,6 +68,8 @@ const Home: React.FC = () => {
     const fetchCategories = async (page: number = 1) => {
         try {
             setLoading(true);
+            setError(null);
+            
             const paginatedData = await categoryService.getPaginated({
                 page,
                 pageSize,
@@ -96,17 +98,37 @@ const Home: React.FC = () => {
             setAllCategories(flatData);
             
             setError(null);
-        } catch (err) {
+        } catch (err: any) {
+            // 401 hatası - token sorunu, AuthContext handle edecek
+            // Don't show error or update state, let AuthContext handle it
+            if (err.message?.includes('401') || err.message?.includes('Unauthorized') || err.message?.includes('Oturum')) {
+                console.log('Unauthorized - token refresh will be handled by AuthContext');
+                setLoading(false);
+                return;
+            }
+            
             setError('Kategoriler yüklenirken bir hata oluştu.');
-            console.error(err);
+            console.error('Category fetch error:', err);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchCategories();
-        loadAllClubs();
+        let isMounted = true;
+        
+        const loadData = async () => {
+            if (isMounted) {
+                await fetchCategories();
+                await loadAllClubs();
+            }
+        };
+        
+        loadData();
+        
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     const loadAllClubs = async () => {
@@ -115,7 +137,14 @@ const Home: React.FC = () => {
             const response = await clubService.getAll(1, 10); // İlk 10 kulüp
             setAllClubs(response.items);
             setClubsTotalCount(response.totalCount);
-        } catch (error) {
+        } catch (error: any) {
+            // 401 hatası - token sorunu, AuthContext handle edecek
+            // Don't show error or update state, let AuthContext handle it
+            if (error.message?.includes('401') || error.message?.includes('Unauthorized') || error.message?.includes('Oturum')) {
+                console.log('Unauthorized - token refresh will be handled by AuthContext');
+                setClubsLoading(false);
+                return;
+            }
             console.error('Failed to load clubs:', error);
         } finally {
             setClubsLoading(false);
@@ -173,6 +202,8 @@ const Home: React.FC = () => {
     const fetchThreads = async () => {
         setThreadLoading(true);
         try {
+            setThreadError(null);
+            
             // Sadece genel forum konularını getir (kulüp konularını filtrele)
             const response = await threadService.getAll({ 
                 page: 1, 
@@ -184,16 +215,36 @@ const Home: React.FC = () => {
             );
             setThreads(generalThreads);
             setThreadError(null);
-        } catch (err) {
+        } catch (err: any) {
+            // 401 hatası - token sorunu, AuthContext handle edecek
+            // Don't show error or update state, let AuthContext handle it
+            if (err.message?.includes('401') || err.message?.includes('Unauthorized') || err.message?.includes('Oturum')) {
+                console.log('Unauthorized - token refresh will be handled by AuthContext');
+                setThreadLoading(false);
+                return;
+            }
+            
             setThreadError('Konular yüklenirken bir hata oluştu.');
-            console.error(err);
+            console.error('Thread fetch error:', err);
         } finally {
             setThreadLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchThreads();
+        let isMounted = true;
+        
+        const loadThreads = async () => {
+            if (isMounted) {
+                await fetchThreads();
+            }
+        };
+        
+        loadThreads();
+        
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     const handleCreateThread = () => {
@@ -223,7 +274,12 @@ const Home: React.FC = () => {
         if ('id' in data) {
             await threadService.update(data as UpdateThreadDto);
         } else {
-            await threadService.create(data as CreateThreadDto);
+            // Genel forumdan oluşturulduğu için clubId null olmalı
+            const threadData: CreateThreadDto = {
+                ...data,
+                clubId: null // Genel forum - clubId null
+            };
+            await threadService.create(threadData);
         }
         await fetchThreads();
     };

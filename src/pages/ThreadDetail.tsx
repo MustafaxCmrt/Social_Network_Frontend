@@ -100,7 +100,12 @@ const ThreadDetail: React.FC = () => {
     }, [id]);
 
     const handleBack = () => {
-        navigate('/');
+        // Eğer thread bir kulübe aitse kulüp detay sayfasına, değilse ana sayfaya git
+        if (thread?.clubId) {
+            navigate(`/club/${thread.clubId}`);
+        } else {
+            navigate('/');
+        }
     };
 
     // Image handling
@@ -467,7 +472,7 @@ const ThreadDetail: React.FC = () => {
             <div className="page-header">
                 <button onClick={handleBack} className="back-btn">
                     <ArrowLeft size={18} />
-                    <span>Foruma Dön</span>
+                    <span>{thread?.clubId ? 'Kulübe Dön' : 'Foruma Dön'}</span>
                 </button>
             </div>
 

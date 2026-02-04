@@ -23,24 +23,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Initial check on mount
     useEffect(() => {
+        let isMounted = true;
+        
         const checkAuth = async () => {
             // Login sayfasindayken API cagirma - race condition onleme
             // Sadece token'lari temizle
             if (window.location.pathname === '/login') {
-                setIsLoading(false);
+                if (isMounted) {
+                    setIsLoading(false);
+                }
                 return;
             }
 
             const token = localStorage.getItem('accessToken');
+            const refreshToken = localStorage.getItem('refreshToken');
+            
+            if (!token && !refreshToken) {
+                if (isMounted) {
+                    setIsLoading(false);
+                }
+                return;
+            }
+
             if (token) {
                 try {
                     const userData = await authService.getCurrentUser();
-                    setUser(userData);
+                    if (isMounted) {
+                        setUser(userData);
+                        setIsLoading(false);
+                    }
+                    return;
                 } catch (error: any) {
-                    console.error('Failed to fetch user', error);
+                    console.error('Failed to fetch user:', error);
                     
-                    // Try to refresh token if it's a 401 error
-                    const refreshToken = localStorage.getItem('refreshToken');
+                    // Try to refresh token if it's a 401/Unauthorized error
                     if (refreshToken && (error.message?.includes('401') || error.message?.includes('Unauthorized'))) {
                         try {
                             console.log('Attempting to refresh token...');
@@ -52,26 +68,66 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                                 
                                 // Try to get user again with new token
                                 const userData = await authService.getCurrentUser();
-                                setUser(userData);
+                                if (isMounted) {
+                                    setUser(userData);
+                                    setIsLoading(false);
+                                }
                                 return;
                             }
-                        } catch (refreshError) {
+                        } catch (refreshError: any) {
                             console.error('Token refresh failed:', refreshError);
-                            // Refresh failed - clear tokens and logout
-                            localStorage.removeItem('accessToken');
-                            localStorage.removeItem('refreshToken');
+                            // Only clear tokens if refresh really failed (not just a network error)
+                            if (refreshError.message?.includes('401') || refreshError.message?.includes('Unauthorized') || refreshError.message?.includes('expired')) {
+                                if (isMounted) {
+                                    localStorage.removeItem('accessToken');
+                                    localStorage.removeItem('refreshToken');
+                                    setUser(null);
+                                }
+                            }
                         }
                     } else {
-                        // Not a 401 or no refresh token - clear tokens
+                        // Not a 401 or no refresh token - but don't clear tokens immediately
+                        // Might be a network error or temporary issue
+                        console.warn('Auth check failed but not clearing tokens:', error.message);
+                    }
+                }
+            } else if (refreshToken) {
+                // Only refresh token exists, try to refresh
+                try {
+                    console.log('Only refresh token exists, attempting refresh...');
+                    const refreshResponse = await authService.refreshToken(refreshToken);
+                    
+                    if (refreshResponse.accessToken && refreshResponse.refreshToken) {
+                        localStorage.setItem('accessToken', refreshResponse.accessToken);
+                        localStorage.setItem('refreshToken', refreshResponse.refreshToken);
+                        
+                        const userData = await authService.getCurrentUser();
+                        if (isMounted) {
+                            setUser(userData);
+                            setIsLoading(false);
+                        }
+                        return;
+                    }
+                } catch (refreshError) {
+                    console.error('Token refresh failed:', refreshError);
+                    if (isMounted) {
                         localStorage.removeItem('accessToken');
                         localStorage.removeItem('refreshToken');
+                        setUser(null);
                     }
                 }
             }
-            setIsLoading(false);
+            
+            if (isMounted) {
+                setIsLoading(false);
+            }
         };
 
         checkAuth();
+        
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     const login = async (data: LoginRequest) => {

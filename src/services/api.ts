@@ -62,6 +62,9 @@ export const api = {
   },
 };
 
+// Global refresh token promise to prevent concurrent refresh attempts
+let refreshTokenPromise: Promise<{ accessToken: string; refreshToken: string } | null> | null = null;
+
 async function request<T>(endpoint: string, options: RequestOptions, isRetry: boolean = false): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
   const headers = new Headers(options.headers);
@@ -86,18 +89,40 @@ async function request<T>(endpoint: string, options: RequestOptions, isRetry: bo
 
     if (refreshToken) {
       try {
-        // Try to refresh the token
-        const refreshResponse = await fetch(`${BASE_URL}/Auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken }),
-        });
+        // Use existing refresh promise if one is already in progress
+        if (!refreshTokenPromise) {
+          refreshTokenPromise = (async () => {
+            try {
+              const refreshResponse = await fetch(`${BASE_URL}/Auth/refresh`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken }),
+              });
 
-        if (refreshResponse.ok) {
-          const refreshData = await refreshResponse.json();
-          localStorage.setItem('accessToken', refreshData.accessToken);
-          localStorage.setItem('refreshToken', refreshData.refreshToken);
+              if (refreshResponse.ok) {
+                const refreshData = await refreshResponse.json();
+                if (refreshData.accessToken && refreshData.refreshToken) {
+                  localStorage.setItem('accessToken', refreshData.accessToken);
+                  localStorage.setItem('refreshToken', refreshData.refreshToken);
+                  return refreshData;
+                }
+              }
+              return null;
+            } catch (error) {
+              console.error('Token refresh failed:', error);
+              return null;
+            } finally {
+              // Clear the promise after a short delay to allow concurrent requests to use it
+              setTimeout(() => {
+                refreshTokenPromise = null;
+              }, 1000);
+            }
+          })();
+        }
 
+        const refreshData = await refreshTokenPromise;
+
+        if (refreshData) {
           // Retry the original request with new token
           return request<T>(endpoint, options, true);
         }
@@ -106,15 +131,10 @@ async function request<T>(endpoint: string, options: RequestOptions, isRetry: bo
       }
     }
 
-    // Refresh failed or no refresh token - logout and redirect
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-
-    // Eger zaten login sayfasindaysak redirect yapma (race condition onleme)
-    if (window.location.pathname !== '/login') {
-      window.location.href = '/login';
-    }
-    throw new Error('Oturum suresi doldu. Lutfen tekrar giris yapin.');
+    // Refresh failed or no refresh token - but don't logout immediately
+    // Let AuthContext handle the logout logic
+    // Only throw error, don't redirect here
+    throw new Error('Unauthorized');
   }
 
   // Handle empty responses or non-JSON

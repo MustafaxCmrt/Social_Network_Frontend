@@ -1,15 +1,18 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Building2, Users, MessageSquare, FileText, ArrowLeft, Plus, LogOut, CheckCircle, AlertCircle, Camera, Upload, X, Settings, Clock, XCircle } from 'lucide-react';
+import { Building2, Users, MessageSquare, FileText, ArrowLeft, Plus, LogOut, CheckCircle, AlertCircle, Camera, Upload, X, Settings, Clock, XCircle, FolderOpen } from 'lucide-react';
 import { clubService } from '../services/clubService';
 import { threadService } from '../services/threadService';
+import { categoryService } from '../services/categoryService';
 import type { Club, ClubRequest } from '../types/club';
 import type { Thread, CreateThreadDto } from '../types/thread';
+import type { Category, CreateCategoryDto } from '../types/category';
 import { ClubRole, ClubRequestStatus, getClubRequestStatusText } from '../types/club';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Modal } from '../components/UI/Modal';
 import { ThreadModal } from '../components/Forum/ThreadModal';
+import { CategoryModal } from '../components/Forum/CategoryModal';
 import { isAdminOrModerator as checkIsAdminOrModerator } from '../types/roles';
 import '../styles/Home.css';
 
@@ -21,8 +24,10 @@ const ClubDetail: React.FC = () => {
 
     const [club, setClub] = useState<Club | null>(null);
     const [threads, setThreads] = useState<Thread[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
     const [threadsLoading, setThreadsLoading] = useState(false);
+    const [categoriesLoading, setCategoriesLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [myClubRequests, setMyClubRequests] = useState<ClubRequest[]>([]);
     const [requestsLoading, setRequestsLoading] = useState(false);
@@ -52,12 +57,17 @@ const ClubDetail: React.FC = () => {
 
     // Thread modal states
     const [isThreadModalOpen, setIsThreadModalOpen] = useState(false);
+    
+    // Category modal states
+    const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
     useEffect(() => {
         if (id) {
             loadClub();
             loadThreads();
             loadMyClubRequests();
+            loadClubCategories();
         }
     }, [id]);
 
@@ -86,18 +96,13 @@ const ClubDetail: React.FC = () => {
         if (!id) return;
         setThreadsLoading(true);
         try {
-            // Sadece bu kulübe ait thread'leri getir
+            // Kulüp thread'lerini getirmek için özel endpoint kullan
             const clubIdNum = parseInt(id);
-            const response = await threadService.getAll({ 
+            const response = await threadService.getClubThreads(clubIdNum, { 
                 page: 1, 
-                pageSize: 20,
-                clubId: clubIdNum
+                pageSize: 20
             });
-            // Sadece bu kulübe ait thread'leri filtrele (ekstra güvenlik)
-            const clubThreads = response.items.filter(thread => 
-                thread.clubId === clubIdNum
-            );
-            setThreads(clubThreads);
+            setThreads(response.items);
         } catch (error: any) {
             console.error('Failed to load threads:', error);
             toast.error('Hata', 'Konular yüklenirken bir hata oluştu.');
@@ -118,6 +123,38 @@ const ClubDetail: React.FC = () => {
             setMyClubRequests([]);
         } finally {
             setRequestsLoading(false);
+        }
+    };
+
+    const loadClubCategories = async () => {
+        if (!id) return;
+        setCategoriesLoading(true);
+        try {
+            const clubCategories = await categoryService.getClubCategories(parseInt(id));
+            setCategories(clubCategories);
+        } catch (error: any) {
+            console.error('Failed to load club categories:', error);
+            // Silently fail - categories might not exist yet
+            setCategories([]);
+        } finally {
+            setCategoriesLoading(false);
+        }
+    };
+
+    const handleCreateCategory = () => {
+        setSelectedCategory(null);
+        setIsCategoryModalOpen(true);
+    };
+
+    const handleCategoryModalSubmit = async (data: CreateCategoryDto) => {
+        if (!id) return;
+        try {
+            await categoryService.createClubCategory(parseInt(id), data);
+            toast.success('Başarılı', 'Kategori başarıyla oluşturuldu!');
+            setIsCategoryModalOpen(false);
+            await loadClubCategories();
+        } catch (error: any) {
+            throw error; // CategoryModal zaten hata gösteriyor
         }
     };
 
@@ -230,10 +267,10 @@ const ClubDetail: React.FC = () => {
     const handleThreadModalSubmit = async (data: CreateThreadDto) => {
         if (!id) return;
         try {
-            // Kulüp ID'sini ekle
+            // Kulüp ID'sini ekle - kulüp sayfasından oluşturulduğu için clubId dolu olmalı
             const threadData: CreateThreadDto = {
                 ...data,
-                clubId: parseInt(id)
+                clubId: parseInt(id) // Kulüp sayfasından oluşturulduğu için clubId dolu
             };
             await threadService.create(threadData);
             toast.success('Başarılı', 'Konu başarıyla oluşturuldu!');
@@ -731,6 +768,134 @@ const ClubDetail: React.FC = () => {
 
                 {/* Right Sidebar */}
                 <aside className="forum-right-panel">
+                    {/* Categories Widget */}
+                    <div className="widget-card" style={{ marginBottom: '1.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                            <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <FolderOpen size={18} style={{ color: 'var(--accent-color)' }} />
+                                Kategoriler
+                            </h3>
+                            {isAdminOrPresident && (
+                                <button
+                                    onClick={handleCreateCategory}
+                                    style={{
+                                        padding: '0.25rem 0.5rem',
+                                        borderRadius: '6px',
+                                        background: 'var(--accent-color)',
+                                        border: 'none',
+                                        color: 'white',
+                                        cursor: 'pointer',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 500,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.25rem',
+                                        transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1.05)';
+                                        e.currentTarget.style.opacity = '0.9';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'scale(1)';
+                                        e.currentTarget.style.opacity = '1';
+                                    }}
+                                >
+                                    <Plus size={14} />
+                                    Yeni
+                                </button>
+                            )}
+                        </div>
+                        
+                        {categoriesLoading ? (
+                            <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                Yükleniyor...
+                            </div>
+                        ) : categories.length === 0 ? (
+                            <div style={{ 
+                                padding: '1.5rem', 
+                                textAlign: 'center', 
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.875rem'
+                            }}>
+                                <FolderOpen size={32} style={{ opacity: 0.3, marginBottom: '0.5rem' }} />
+                                <p style={{ margin: 0 }}>Henüz kategori oluşturulmamış</p>
+                            </div>
+                        ) : (
+                            <div style={{ 
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                gap: '0.5rem',
+                                maxHeight: '300px',
+                                overflowY: 'auto',
+                                overflowX: 'hidden',
+                                paddingRight: '0.5rem'
+                            }}>
+                                {categories.map((category) => (
+                                    <div
+                                        key={category.id}
+                                        onClick={() => navigate(`/category/${category.slug}`)}
+                                        style={{
+                                            padding: '0.75rem',
+                                            borderRadius: '8px',
+                                            border: '1px solid var(--navbar-border)',
+                                            background: 'var(--bg-secondary)',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.75rem'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.background = 'rgba(99, 102, 241, 0.05)';
+                                            e.currentTarget.style.borderColor = 'var(--accent-color)';
+                                            e.currentTarget.style.transform = 'translateX(4px)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.background = 'var(--bg-secondary)';
+                                            e.currentTarget.style.borderColor = 'var(--navbar-border)';
+                                            e.currentTarget.style.transform = 'translateX(0)';
+                                        }}
+                                    >
+                                        <FolderOpen size={16} style={{ color: 'var(--accent-color)', flexShrink: 0 }} />
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ 
+                                                fontWeight: 600, 
+                                                fontSize: '0.875rem',
+                                                color: 'var(--text-primary)',
+                                                marginBottom: '0.25rem',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap'
+                                            }}>
+                                                {category.title}
+                                            </div>
+                                            {category.description && (
+                                                <div style={{ 
+                                                    fontSize: '0.75rem',
+                                                    color: 'var(--text-secondary)',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    whiteSpace: 'nowrap'
+                                                }}>
+                                                    {category.description}
+                                                </div>
+                                            )}
+                                            <div style={{ 
+                                                fontSize: '0.7rem',
+                                                color: 'var(--text-tertiary)',
+                                                marginTop: '0.25rem'
+                                            }}>
+                                                {category.threadCount} konu
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Club Info Widget */}
                     <div className="widget-card">
                         <h3>Kulüp Bilgileri</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1145,6 +1310,19 @@ const ClubDetail: React.FC = () => {
                 isOpen={isThreadModalOpen}
                 onClose={() => setIsThreadModalOpen(false)}
                 onSubmit={handleThreadModalSubmit}
+                clubId={id ? parseInt(id) : null}
+            />
+
+            {/* Category Modal */}
+            <CategoryModal
+                isOpen={isCategoryModalOpen}
+                onClose={() => {
+                    setIsCategoryModalOpen(false);
+                    setSelectedCategory(null);
+                }}
+                onSubmit={handleCategoryModalSubmit}
+                editCategory={selectedCategory}
+                categories={categories}
             />
         </div>
     );

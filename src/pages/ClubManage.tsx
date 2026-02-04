@@ -74,10 +74,18 @@ const ClubManage: React.FC = () => {
 
     useEffect(() => {
         if (id && club) {
-            loadMembers();
-            loadAllMembersForStats(); // İstatistikler için tüm üyeleri yükle
+            // Yetki kontrolü - sadece admin/moderator veya kulüp başkanı erişebilir
+            const hasPermission = checkIsAdminOrModerator(user) || 
+                (club.currentUserRole === ClubRoleEnum.President);
+            
+            if (hasPermission) {
+                loadMembers();
+                loadAllMembersForStats(); // İstatistikler için tüm üyeleri yükle
+            } else {
+                setError('Bu sayfaya erişim yetkiniz yok. Sadece kulüp başkanı, admin veya moderatör erişebilir.');
+            }
         }
-    }, [id, club, page, statusFilter]);
+    }, [id, club, page, statusFilter, user]);
 
     // Search query değiştiğinde sadece görüntülenen listeyi filtrele
     useEffect(() => {
@@ -111,6 +119,16 @@ const ClubManage: React.FC = () => {
     // Tüm üyeleri yükle (istatistikler için - filtre olmadan)
     const loadAllMembersForStats = async () => {
         if (!id || !club) return;
+        
+        // Yetki kontrolü - sadece admin/moderator veya kulüp başkanı erişebilir
+        const hasPermission = checkIsAdminOrModerator(user) || 
+            (club.currentUserRole === ClubRoleEnum.President);
+        
+        if (!hasPermission) {
+            setStatsLoading(false);
+            return;
+        }
+        
         setStatsLoading(true);
         try {
             // Tüm üyeleri yükle (status filter olmadan, sayfalama olmadan)
@@ -122,7 +140,12 @@ const ClubManage: React.FC = () => {
             );
             setAllMembers(response.items);
         } catch (error: any) {
-            console.error('İstatistikler yüklenemedi:', error);
+            // 403 hatası - yetki sorunu, sessizce geç
+            if (error.message?.includes('403') || error.message?.includes('Forbidden')) {
+                console.warn('İstatistikler yüklenemedi - yetki yok');
+            } else {
+                console.error('İstatistikler yüklenemedi:', error);
+            }
         } finally {
             setStatsLoading(false);
         }
@@ -131,6 +154,17 @@ const ClubManage: React.FC = () => {
     // Görüntüleme için üyeleri yükle (filtrelenmiş)
     const loadMembers = async () => {
         if (!id || !club) return;
+        
+        // Yetki kontrolü - sadece admin/moderator veya kulüp başkanı erişebilir
+        const hasPermission = checkIsAdminOrModerator(user) || 
+            (club.currentUserRole === ClubRoleEnum.President);
+        
+        if (!hasPermission) {
+            setError('Bu sayfaya erişim yetkiniz yok. Sadece kulüp başkanı, admin veya moderatör erişebilir.');
+            setMembersLoading(false);
+            return;
+        }
+        
         setMembersLoading(true);
         try {
             const status = statusFilter === 'all' ? undefined : statusFilter;
@@ -148,7 +182,13 @@ const ClubManage: React.FC = () => {
             // Search query varsa filtrele
             filterMembersBySearch(response.items);
         } catch (error: any) {
-            toast.error('Hata', error.message || 'Üyeler yüklenemedi.');
+            // 403 hatası - yetki sorunu
+            if (error.message?.includes('403') || error.message?.includes('Forbidden')) {
+                setError('Bu sayfaya erişim yetkiniz yok. Sadece kulüp başkanı, admin veya moderatör erişebilir.');
+                toast.error('Yetki Hatası', 'Bu sayfaya erişim yetkiniz yok.');
+            } else {
+                toast.error('Hata', error.message || 'Üyeler yüklenemedi.');
+            }
         } finally {
             setMembersLoading(false);
         }

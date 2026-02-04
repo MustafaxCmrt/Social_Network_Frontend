@@ -502,6 +502,24 @@
 .notification-list {
     max-height: 400px;
     overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.notification-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.notification-list::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+.notification-list::-webkit-scrollbar-thumb {
+    background: var(--navbar-border);
+    border-radius: 3px;
+}
+
+.notification-list::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
 }
 
 .notification-item {
@@ -512,6 +530,8 @@
     cursor: pointer;
     transition: background 0.2s;
     position: relative;
+    align-items: flex-start;
+    word-wrap: break-word;
 }
 
 .notification-item:hover {
@@ -542,24 +562,33 @@
 .notif-content {
     flex: 1;
     min-width: 0;
+    overflow: hidden;
+    word-wrap: break-word;
+    word-break: break-word;
 }
 
 .notif-title {
     font-size: 0.9rem;
     font-weight: 600;
     color: var(--text-primary);
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.25rem;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.3;
 }
 
 .notif-message {
     font-size: 0.85rem;
     color: var(--text-secondary);
-    line-height: 1.4;
+    line-height: 1.5;
     margin-bottom: 0.4rem;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+    display: block;
+    max-height: none;
 }
 
 .notif-time {
