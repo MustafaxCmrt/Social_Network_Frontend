@@ -9,6 +9,7 @@ export const threadService = {
         if (params.pageSize) queryParams.append('pageSize', params.pageSize.toString());
         if (params.q) queryParams.append('q', params.q);
         if (params.categoryId) queryParams.append('categoryId', params.categoryId.toString());
+        if (params.clubId) queryParams.append('clubId', params.clubId.toString());
         if (params.isSolved !== undefined) queryParams.append('isSolved', params.isSolved.toString());
         if (params.userId) queryParams.append('userId', params.userId.toString());
         if (params.sortBy) queryParams.append('sortBy', params.sortBy);

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Building2, ChevronRight, Users } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import '../styles/Home.css';
 import { CategoryCard, ThreadItem, ReportModal } from './Forum';
 import type { Category, CreateCategoryDto, UpdateCategoryDto } from '../types/category';
@@ -10,6 +11,8 @@ import { DeleteConfirmModal } from './Forum/DeleteConfirmModal';
 import type { Thread, CreateThreadDto, UpdateThreadDto } from '../types/thread';
 import { threadService } from '../services/threadService';
 import { useAuth } from '../context/AuthContext';
+import { clubService } from '../services/clubService';
+import type { Club } from '../types/club';
 
 // Tree yapısını düz listeye çevir
 const flattenTree = (categories: Category[]): Category[] => {
@@ -30,12 +33,18 @@ const flattenTree = (categories: Category[]): Category[] => {
 
 const Home: React.FC = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const currentUserId = user?.userId;
 
     const [categories, setCategories] = useState<Category[]>([]);
     const [allCategories, setAllCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Clubs state (all clubs)
+    const [allClubs, setAllClubs] = useState<Club[]>([]);
+    const [clubsLoading, setClubsLoading] = useState(false);
+    const [clubsTotalCount, setClubsTotalCount] = useState(0);
 
     // Pagination States
     const [currentPage, setCurrentPage] = useState(1);
@@ -97,7 +106,21 @@ const Home: React.FC = () => {
 
     useEffect(() => {
         fetchCategories();
+        loadAllClubs();
     }, []);
+
+    const loadAllClubs = async () => {
+        setClubsLoading(true);
+        try {
+            const response = await clubService.getAll(1, 10); // İlk 10 kulüp
+            setAllClubs(response.items);
+            setClubsTotalCount(response.totalCount);
+        } catch (error) {
+            console.error('Failed to load clubs:', error);
+        } finally {
+            setClubsLoading(false);
+        }
+    };
 
     const handleCreateCategory = () => {
         setSelectedCategory(null);
@@ -150,8 +173,16 @@ const Home: React.FC = () => {
     const fetchThreads = async () => {
         setThreadLoading(true);
         try {
-            const response = await threadService.getAll();
-            setThreads(response.items);
+            // Sadece genel forum konularını getir (kulüp konularını filtrele)
+            const response = await threadService.getAll({ 
+                page: 1, 
+                pageSize: 20 
+            });
+            // Frontend'de kulüp konularını filtrele (clubId null veya undefined olanlar)
+            const generalThreads = response.items.filter(thread => 
+                !thread.clubId || thread.clubId === null
+            );
+            setThreads(generalThreads);
             setThreadError(null);
         } catch (err) {
             setThreadError('Konular yüklenirken bir hata oluştu.');
@@ -404,18 +435,181 @@ const Home: React.FC = () => {
                     </div>
                 </main>
 
-                {/* Right Sidebar - Trending (Optional/Desktop) */}
+                {/* Right Sidebar - Clubs & Trending */}
                 <aside className="forum-right-panel">
+                    {/* Clubs Widget - All Clubs */}
                     <div className="widget-card">
-                        <h3>Popüler Etiketler</h3>
-                        <div className="tags-cloud">
-                            <span className="tag">#yazılım</span>
-                            <span className="tag">#tasarım</span>
-                            <span className="tag">#react</span>
-                            <span className="tag">#oyun</span>
-                            <span className="tag">#donanım</span>
-                            <span className="tag">#kariyer</span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                            <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <Building2 size={18} style={{ color: 'var(--accent-color)' }} />
+                                Kulüpler
+                            </h3>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                {clubsTotalCount}
+                            </span>
                         </div>
+                        
+                        {clubsLoading ? (
+                            <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                Yükleniyor...
+                            </div>
+                        ) : allClubs.length === 0 ? (
+                            <div style={{ 
+                                padding: '1.5rem', 
+                                textAlign: 'center', 
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.875rem'
+                            }}>
+                                <Building2 size={32} style={{ opacity: 0.3, marginBottom: '0.5rem' }} />
+                                <p style={{ margin: 0 }}>Henüz hiç kulüp oluşturulmamış</p>
+                            </div>
+                        ) : (
+                            <>
+                                <div style={{ 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    gap: '0.75rem',
+                                    maxHeight: '400px',
+                                    overflowY: 'auto',
+                                    overflowX: 'hidden',
+                                    paddingRight: '0.5rem',
+                                    scrollbarWidth: 'thin',
+                                    scrollbarColor: 'rgba(99, 102, 241, 0.3) transparent'
+                                }} className="clubs-scroll-container">
+                                    {allClubs.map((club) => (
+                                        <div
+                                            key={club.id}
+                                            onClick={() => navigate(`/club/${club.id}`)}
+                                            style={{
+                                                padding: '0.75rem',
+                                                borderRadius: '10px',
+                                                border: '1px solid var(--navbar-border)',
+                                                background: 'var(--bg-secondary)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.75rem',
+                                                flexShrink: 0
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.background = 'rgba(99, 102, 241, 0.05)';
+                                                e.currentTarget.style.borderColor = 'var(--accent-color)';
+                                                e.currentTarget.style.transform = 'translateX(4px)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.background = 'var(--bg-secondary)';
+                                                e.currentTarget.style.borderColor = 'var(--navbar-border)';
+                                                e.currentTarget.style.transform = 'translateX(0)';
+                                            }}
+                                        >
+                                            {club.logoUrl ? (
+                                                <img 
+                                                    src={club.logoUrl} 
+                                                    alt={club.name}
+                                                    style={{
+                                                        width: '40px',
+                                                        height: '40px',
+                                                        borderRadius: '8px',
+                                                        objectFit: 'cover',
+                                                        flexShrink: 0
+                                                    }}
+                                                />
+                                            ) : (
+                                                <div style={{
+                                                    width: '40px',
+                                                    height: '40px',
+                                                    borderRadius: '8px',
+                                                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: 'white',
+                                                    fontWeight: 'bold',
+                                                    fontSize: '1.1rem',
+                                                    flexShrink: 0
+                                                }}>
+                                                    {club.name.charAt(0).toUpperCase()}
+                                                </div>
+                                            )}
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ 
+                                                    fontWeight: 600, 
+                                                    fontSize: '0.9rem',
+                                                    color: 'var(--text-primary)',
+                                                    marginBottom: '0.25rem',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    whiteSpace: 'nowrap'
+                                                }}>
+                                                    {club.name}
+                                                </div>
+                                                <div style={{ 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '0.5rem',
+                                                    fontSize: '0.75rem',
+                                                    color: 'var(--text-secondary)'
+                                                }}>
+                                                    <Users size={12} />
+                                                    <span>{club.memberCount} üye</span>
+                                                    {club.isPublic ? (
+                                                        <span style={{
+                                                            padding: '0.15rem 0.5rem',
+                                                            borderRadius: '4px',
+                                                            background: 'rgba(16, 185, 129, 0.1)',
+                                                            color: '#10b981',
+                                                            fontSize: '0.7rem'
+                                                        }}>
+                                                            Açık
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{
+                                                            padding: '0.15rem 0.5rem',
+                                                            borderRadius: '4px',
+                                                            background: 'rgba(245, 158, 11, 0.1)',
+                                                            color: '#f59e0b',
+                                                            fontSize: '0.7rem'
+                                                        }}>
+                                                            Özel
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <ChevronRight size={16} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                                        </div>
+                                    ))}
+                                </div>
+                                {clubsTotalCount > allClubs.length && (
+                                    <button
+                                        onClick={() => navigate('/clubs')}
+                                        style={{
+                                            marginTop: '0.75rem',
+                                            width: '100%',
+                                            padding: '0.5rem',
+                                            background: 'var(--bg-secondary)',
+                                            border: '1px solid var(--navbar-border)',
+                                            borderRadius: '8px',
+                                            color: 'var(--text-primary)',
+                                            cursor: 'pointer',
+                                            fontSize: '0.875rem',
+                                            fontWeight: 500,
+                                            transition: 'all 0.2s'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.background = 'rgba(99, 102, 241, 0.05)';
+                                            e.currentTarget.style.borderColor = 'var(--accent-color)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.background = 'var(--bg-secondary)';
+                                            e.currentTarget.style.borderColor = 'var(--navbar-border)';
+                                        }}
+                                    >
+                                        Tümünü Gör ({clubsTotalCount} kulüp)
+                                    </button>
+                                )}
+                            </>
+                        )}
                     </div>
                 </aside>
             </div>

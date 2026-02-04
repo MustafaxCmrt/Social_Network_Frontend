@@ -16,6 +16,9 @@ import ThreadDetail from './pages/ThreadDetail';
 import Search from './pages/Search';
 import AdminPanel from './pages/AdminPanel';
 import MyReports from './pages/MyReports';
+import ClubDetail from './pages/ClubDetail';
+import ClubManage from './pages/ClubManage';
+import MyClubs from './pages/MyClubs';
 import ToastContainer from './components/Toast';
 import './App.css';
 
@@ -39,6 +42,9 @@ function App() {
                 <Route path="/user/:userId" element={<UserProfile />} />
                 <Route path="/search" element={<Search />} />
                 <Route path="/thread/:id" element={<ThreadDetail />} />
+                <Route path="/club/:id" element={<ClubDetail />} />
+                <Route path="/club/:id/manage" element={<ClubManage />} />
+                <Route path="/my-clubs" element={<MyClubs />} />
                 <Route path="/my-reports" element={<MyReports />} />
                 <Route path="/admin" element={<AdminPanel />} />
               </Routes>

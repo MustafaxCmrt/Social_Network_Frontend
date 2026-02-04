@@ -2,15 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { userService } from '../services/userService';
 import type { UpdateProfileRequest } from '../services/userService';
-import { Eye, EyeOff, Camera, AlertTriangle, Mail } from 'lucide-react';
+import { Eye, EyeOff, Camera, AlertTriangle, Mail, Building2, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { clubService } from '../services/clubService';
+import type { UserClubMembership } from '../types/club';
+import { getClubRoleText } from '../types/club';
 import '../styles/Auth.css';
 
 const Profile: React.FC = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
-    const [activeTab, setActiveTab] = useState<'general' | 'security'>('general');
+    const [activeTab, setActiveTab] = useState<'general' | 'security' | 'clubs'>('general');
     const [loading, setLoading] = useState(false);
+    
+    // Clubs state
+    const [userClubs, setUserClubs] = useState<UserClubMembership[]>([]);
+    const [clubsLoading, setClubsLoading] = useState(false);
     const [showPasswords, setShowPasswords] = useState<{ current: boolean, new: boolean, confirm: boolean }>({
         current: false,
         new: false,
@@ -46,8 +53,29 @@ const Profile: React.FC = () => {
                 email: user.email
             }));
             setOriginalEmail(user.email);
+            // Load clubs on mount to show tab if user has clubs
+            loadUserClubs();
         }
     }, [user]);
+
+    // Load user clubs when clubs tab is active
+    useEffect(() => {
+        if (activeTab === 'clubs' && user) {
+            loadUserClubs();
+        }
+    }, [activeTab]);
+
+    const loadUserClubs = async () => {
+        setClubsLoading(true);
+        try {
+            const clubs = await clubService.getMine();
+            setUserClubs(clubs);
+        } catch (error) {
+            console.error('Failed to load clubs:', error);
+        } finally {
+            setClubsLoading(false);
+        }
+    };
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
@@ -246,6 +274,27 @@ const Profile: React.FC = () => {
                     >
                         Guvenlik & Sifre
                     </button>
+                    {userClubs.length > 0 && (
+                        <button
+                            onClick={() => setActiveTab('clubs')}
+                            style={{
+                                padding: '0.75rem 1.5rem',
+                                borderRadius: '8px',
+                                background: activeTab === 'clubs' ? '#3b82f6' : 'var(--bg-secondary)',
+                                color: activeTab === 'clubs' ? 'white' : 'var(--text-secondary)',
+                                border: '1px solid var(--navbar-border)',
+                                cursor: 'pointer',
+                                fontWeight: 500,
+                                transition: 'all 0.2s',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem'
+                            }}
+                        >
+                            <Building2 size={16} />
+                            Kulüplerim ({userClubs.length})
+                        </button>
+                    )}
                 </div>
 
                 {message && (
@@ -357,6 +406,133 @@ const Profile: React.FC = () => {
                 </form>
 
                 {/* Danger Zone */}
+                {activeTab === 'clubs' && (
+                    <div style={{ marginTop: '2rem' }}>
+                        <h3 style={{ marginBottom: '1.5rem', fontSize: '1.25rem', fontWeight: 600 }}>
+                            <Building2 size={20} style={{ marginRight: '0.5rem', verticalAlign: 'middle' }} />
+                            Katıldığım Kulüpler
+                        </h3>
+                        
+                        {clubsLoading ? (
+                            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                                Yükleniyor...
+                            </div>
+                        ) : userClubs.length === 0 ? (
+                            <div style={{ 
+                                padding: '3rem', 
+                                textAlign: 'center', 
+                                color: 'var(--text-secondary)',
+                                background: 'var(--bg-secondary)',
+                                borderRadius: '12px',
+                                border: '1px solid var(--navbar-border)'
+                            }}>
+                                <Building2 size={48} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                                <p style={{ margin: 0, fontSize: '1rem' }}>Henüz hiç kulübe katılmadınız</p>
+                            </div>
+                        ) : (
+                            <div style={{ 
+                                display: 'grid', 
+                                gap: '1rem',
+                                maxHeight: '600px',
+                                overflowY: 'auto',
+                                paddingRight: '0.5rem'
+                            }}>
+                                {userClubs.map((club) => (
+                                    <div
+                                        key={club.clubId}
+                                        onClick={() => navigate(`/club/${club.clubId}`)}
+                                        style={{
+                                            padding: '1rem',
+                                            borderRadius: '12px',
+                                            border: '1px solid var(--navbar-border)',
+                                            background: 'var(--bg-secondary)',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '1rem'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            e.currentTarget.style.background = 'rgba(99, 102, 241, 0.05)';
+                                            e.currentTarget.style.borderColor = '#3b82f6';
+                                            e.currentTarget.style.transform = 'translateX(4px)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            e.currentTarget.style.background = 'var(--bg-secondary)';
+                                            e.currentTarget.style.borderColor = 'var(--navbar-border)';
+                                            e.currentTarget.style.transform = 'translateX(0)';
+                                        }}
+                                    >
+                                        {club.logoUrl ? (
+                                            <img 
+                                                src={club.logoUrl} 
+                                                alt={club.clubName}
+                                                style={{
+                                                    width: '50px',
+                                                    height: '50px',
+                                                    borderRadius: '10px',
+                                                    objectFit: 'cover',
+                                                    flexShrink: 0
+                                                }}
+                                            />
+                                        ) : (
+                                            <div style={{
+                                                width: '50px',
+                                                height: '50px',
+                                                borderRadius: '10px',
+                                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: 'white',
+                                                fontWeight: 'bold',
+                                                fontSize: '1.25rem',
+                                                flexShrink: 0
+                                            }}>
+                                                {club.clubName.charAt(0).toUpperCase()}
+                                            </div>
+                                        )}
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <h4 style={{ 
+                                                margin: 0, 
+                                                marginBottom: '0.25rem',
+                                                fontSize: '1rem',
+                                                fontWeight: 600,
+                                                color: 'var(--text-primary)',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap'
+                                            }}>
+                                                {club.clubName}
+                                            </h4>
+                                            <div style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '0.75rem',
+                                                fontSize: '0.875rem',
+                                                color: 'var(--text-secondary)'
+                                            }}>
+                                                <span style={{
+                                                    padding: '0.25rem 0.75rem',
+                                                    borderRadius: '6px',
+                                                    background: 'rgba(99, 102, 241, 0.1)',
+                                                    color: '#3b82f6',
+                                                    fontWeight: 500
+                                                }}>
+                                                    {getClubRoleText(club.myRole)}
+                                                </span>
+                                                <span>•</span>
+                                                <span>{new Date(club.joinedAt).toLocaleDateString('tr-TR')}</span>
+                                            </div>
+                                        </div>
+                                        <ChevronRight size={20} style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {activeTab === 'security' && (
                     <div style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '1px solid rgba(239,68,68,0.2)' }}>
                         <h3 style={{ color: '#ef4444', marginTop: 0 }}>Hesap Sil</h3>

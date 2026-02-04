@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import { Sun, Moon, Menu, X, LogOut, Settings, ChevronDown, Search, Bell, CheckCheck, Trash2, Shield, Flag } from 'lucide-react';
+import { Sun, Moon, Menu, X, LogOut, Settings, ChevronDown, Search, Bell, CheckCheck, Trash2, Shield, Flag, Building2 } from 'lucide-react';
 import { notificationService } from '../services/notificationService';
 import type { Notification } from '../types/notification';
 import '../styles/Navbar.css';
@@ -453,6 +453,27 @@ const Navbar: React.FC = () => {
                                                 >
                                                     <Settings size={18} />
                                                     <span>Profil Ayarları</span>
+                                                </Link>
+
+                                                {/* Kulüplerim */}
+                                                <Link
+                                                    to="/my-clubs"
+                                                    onClick={() => setIsProfileMenuOpen(false)}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.75rem',
+                                                        padding: '0.75rem 1rem',
+                                                        color: 'var(--text-primary)',
+                                                        textDecoration: 'none',
+                                                        borderRadius: '8px',
+                                                        transition: 'background 0.2s'
+                                                    }}
+                                                    onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                                >
+                                                    <Building2 size={18} />
+                                                    <span>Kulüplerim</span>
                                                 </Link>
 
                                                 {/* Raporlarım */}

@@ -8,6 +8,25 @@
     background-color: var(--bg-primary);
 }
 
+/* Clubs Scrollbar Styling */
+.clubs-scroll-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.clubs-scroll-container::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 10px;
+}
+
+.clubs-scroll-container::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.3);
+    border-radius: 10px;
+}
+
+.clubs-scroll-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.5);
+}
+
 /* Main Layout Grid */
 .forum-layout {
     display: grid;

@@ -7,12 +7,14 @@ import { dashboardService } from '../services/dashboardService';
 import { auditLogService } from '../services/auditLogService';
 import { userService } from '../services/userService';
 import { reportService } from '../services/reportService';
+import { clubService } from '../services/clubService';
 import type { UserBan, UserMute, BanUserRequest, MuteUserRequest, UserSearchResult, ThreadSearchResult } from '../services/moderationService';
 import type { DashboardStats, TopUser, TopReported } from '../services/dashboardService';
 import type { AuditLogItem, AuditLogFilters } from '../services/auditLogService';
 import type { UserListItem, UserProfile, UserThreadListItem, UserPostListItem } from '../services/userService';
 import type { Report, UpdateReportStatusDto } from '../types/report';
 import { ReportStatus, getReportReasonText, getReportStatusText } from '../types/report';
+import type { Club, CreateClubDto, ClubRequest, ReviewClubRequestDto } from '../types/club';
 import {
     Shield,
     Ban,
@@ -46,7 +48,9 @@ import {
     Pencil,
     ArrowLeft,
     Flag,
-    User
+    User,
+    Building2,
+    Plus
 } from 'lucide-react';
 import '../styles/Admin.css';
 import { Modal } from '../components/UI/Modal';
@@ -58,13 +62,13 @@ const AdminPanel: React.FC = () => {
 
     // URL-based section persistence
     const [searchParams, setSearchParams] = useSearchParams();
-    const initialSection = (searchParams.get('section') as 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports') || 'dashboard';
+    const initialSection = (searchParams.get('section') as 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports' | 'clubs' | 'club-requests') || 'dashboard';
 
     // Sidebar state
-    const [activeSection, setActiveSectionState] = useState<'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports'>(initialSection);
+    const [activeSection, setActiveSectionState] = useState<'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports' | 'clubs' | 'club-requests'>(initialSection);
 
     // Wrapper to update both state and URL
-    const setActiveSection = (section: 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports') => {
+    const setActiveSection = (section: 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports' | 'clubs' | 'club-requests') => {
         setActiveSectionState(section);
         setSearchParams({ section });
     };
@@ -195,8 +199,45 @@ const AdminPanel: React.FC = () => {
     const [deleteUserModal, setDeleteUserModal] = useState<{ isOpen: boolean; user: UserListItem | null }>({ isOpen: false, user: null });
     const [deleteUserLoading, setDeleteUserLoading] = useState(false);
 
+    // Club Management state
+    const [clubs, setClubs] = useState<Club[]>([]);
+    const [clubsPage, setClubsPage] = useState(1);
+    const [clubsPageSize] = useState(10);
+    const [clubsTotalPages, setClubsTotalPages] = useState(0);
+    const [clubsTotalCount, setClubsTotalCount] = useState(0);
+    const [clubsSearch, setClubsSearch] = useState('');
+    const [clubsLoading, setClubsLoading] = useState(false);
+    const [clubModal, setClubModal] = useState<{ isOpen: boolean; mode: 'create' | 'edit'; club: Club | null }>({ isOpen: false, mode: 'create', club: null });
+    const [clubFormData, setClubFormData] = useState<CreateClubDto & { logoUrl: string | null; bannerUrl: string | null }>({
+        name: '',
+        description: '',
+        isPublic: true,
+        requiresApproval: true,
+        logoUrl: null,
+        bannerUrl: null
+    });
+    const [clubFormLoading, setClubFormLoading] = useState(false);
+    const [deleteClubModal, setDeleteClubModal] = useState<{ isOpen: boolean; club: Club | null }>({ isOpen: false, club: null });
+    const [deleteClubLoading, setDeleteClubLoading] = useState(false);
+
+    // Club Requests state (admin)
+    const [clubRequests, setClubRequests] = useState<ClubRequest[]>([]);
+    const [clubRequestsPage, setClubRequestsPage] = useState(1);
+    const [clubRequestsPageSize] = useState(10);
+    const [clubRequestsTotalPages, setClubRequestsTotalPages] = useState(0);
+    const [clubRequestsTotalCount, setClubRequestsTotalCount] = useState(0);
+    const [clubRequestsLoading, setClubRequestsLoading] = useState(false);
+    const [reviewRequestModal, setReviewRequestModal] = useState<{ isOpen: boolean; request: ClubRequest | null }>({ isOpen: false, request: null });
+    const [reviewRequestData, setReviewRequestData] = useState<ReviewClubRequestDto>({
+        requestId: 0,
+        approve: true,
+        rejectionReason: null
+    });
+    const [reviewRequestLoading, setReviewRequestLoading] = useState(false);
+
     // Sidebar state
     const [permissionsExpanded, setPermissionsExpanded] = useState(false);
+    const [clubsExpanded, setClubsExpanded] = useState(false);
 
     // Redirect if not admin
     // Redirect if not admin
@@ -230,6 +271,20 @@ const AdminPanel: React.FC = () => {
             loadReports();
         }
     }, [isAdminOrModerator, activeSection, reportsPage, reportStatusFilter]);
+
+    // Load clubs when section changes or page/search changes
+    useEffect(() => {
+        if (isAdminOrModerator && activeSection === 'clubs') {
+            loadClubs();
+        }
+    }, [isAdminOrModerator, activeSection, clubsPage, clubsSearch]);
+
+    // Load club requests when section changes or page changes
+    useEffect(() => {
+        if (isAdminOrModerator && activeSection === 'club-requests') {
+            loadClubRequests();
+        }
+    }, [isAdminOrModerator, activeSection, clubRequestsPage]);
 
     // Load user profile from URL on page refresh
     useEffect(() => {
@@ -888,6 +943,210 @@ const AdminPanel: React.FC = () => {
         loadUserList(1, userListSearch);
     };
 
+    // ========== CLUB MANAGEMENT FUNCTIONS ==========
+
+    // Load clubs
+    const loadClubs = async () => {
+        setClubsLoading(true);
+        try {
+            const response = await clubService.getAll(clubsPage, clubsPageSize, clubsSearch || undefined);
+            setClubs(response.items);
+            setClubsPage(response.page);
+            setClubsTotalPages(response.totalPages);
+            setClubsTotalCount(response.totalCount);
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Kulüpler yüklenemedi.');
+        } finally {
+            setClubsLoading(false);
+        }
+    };
+
+    // Reset club form
+    const resetClubForm = () => {
+        setClubFormData({
+            name: '',
+            description: '',
+            isPublic: true,
+            requiresApproval: true,
+            logoUrl: null,
+            bannerUrl: null
+        });
+    };
+
+    // Open create club modal
+    const openCreateClubModal = () => {
+        resetClubForm();
+        setClubModal({ isOpen: true, mode: 'create', club: null });
+    };
+
+    // Open edit club modal
+    const openEditClubModal = (club: Club) => {
+        setClubFormData({
+            name: club.name,
+            description: club.description,
+            isPublic: club.isPublic,
+            requiresApproval: club.requiresApproval,
+            logoUrl: club.logoUrl,
+            bannerUrl: club.bannerUrl
+        });
+        setClubModal({ isOpen: true, mode: 'edit', club });
+    };
+
+    // Close club modal
+    const closeClubModal = () => {
+        setClubModal({ isOpen: false, mode: 'create', club: null });
+        resetClubForm();
+    };
+
+    // Handle create club
+    const handleCreateClub = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!clubFormData.name.trim()) {
+            toast.error('Eksik Bilgi', 'Kulüp adı zorunludur.');
+            return;
+        }
+
+        setClubFormLoading(true);
+        try {
+            await clubService.create({
+                name: clubFormData.name.trim(),
+                description: clubFormData.description.trim(),
+                isPublic: clubFormData.isPublic,
+                requiresApproval: clubFormData.requiresApproval
+            });
+            toast.success('Başarılı', 'Kulüp başarıyla oluşturuldu!');
+            closeClubModal();
+            loadClubs();
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Kulüp oluşturulamadı.');
+        } finally {
+            setClubFormLoading(false);
+        }
+    };
+
+    // Handle update club
+    const handleUpdateClub = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!clubModal.club) return;
+
+        if (!clubFormData.name.trim()) {
+            toast.error('Eksik Bilgi', 'Kulüp adı zorunludur.');
+            return;
+        }
+
+        setClubFormLoading(true);
+        try {
+            await clubService.update({
+                id: clubModal.club.id,
+                name: clubFormData.name.trim(),
+                description: clubFormData.description.trim(),
+                logoUrl: clubFormData.logoUrl ?? null,
+                bannerUrl: clubFormData.bannerUrl ?? null,
+                isPublic: clubFormData.isPublic,
+                requiresApproval: clubFormData.requiresApproval
+            });
+            toast.success('Başarılı', 'Kulüp başarıyla güncellendi!');
+            closeClubModal();
+            loadClubs();
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Kulüp güncellenemedi.');
+        } finally {
+            setClubFormLoading(false);
+        }
+    };
+
+    // Handle delete club
+    const handleDeleteClub = async () => {
+        if (!deleteClubModal.club) return;
+
+        setDeleteClubLoading(true);
+        try {
+            await clubService.delete(deleteClubModal.club.id);
+            toast.success('Başarılı', 'Kulüp başarıyla silindi!');
+            setDeleteClubModal({ isOpen: false, club: null });
+            loadClubs();
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Kulüp silinemedi.');
+        } finally {
+            setDeleteClubLoading(false);
+        }
+    };
+
+    // Handle club list search
+    const handleClubListSearch = (e: React.FormEvent) => {
+        e.preventDefault();
+        setClubsPage(1);
+        loadClubs();
+    };
+
+    // ========== CLUB REQUEST MANAGEMENT FUNCTIONS ==========
+
+    // Load club requests
+    const loadClubRequests = async () => {
+        setClubRequestsLoading(true);
+        try {
+            const response = await clubService.getPendingRequests(clubRequestsPage, clubRequestsPageSize);
+            setClubRequests(response.items);
+            setClubRequestsPage(response.page);
+            setClubRequestsTotalPages(response.totalPages);
+            setClubRequestsTotalCount(response.totalCount);
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Kulüp başvuruları yüklenemedi.');
+        } finally {
+            setClubRequestsLoading(false);
+        }
+    };
+
+    // Open review request modal
+    const openReviewRequestModal = (request: ClubRequest, approve: boolean) => {
+        setReviewRequestData({
+            requestId: request.id,
+            approve,
+            rejectionReason: null
+        });
+        setReviewRequestModal({ isOpen: true, request });
+    };
+
+    // Close review request modal
+    const closeReviewRequestModal = () => {
+        setReviewRequestModal({ isOpen: false, request: null });
+        setReviewRequestData({
+            requestId: 0,
+            approve: true,
+            rejectionReason: null
+        });
+    };
+
+    // Handle review request
+    const handleReviewRequest = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!reviewRequestModal.request) return;
+
+        if (!reviewRequestData.approve && !reviewRequestData.rejectionReason?.trim()) {
+            toast.error('Eksik Bilgi', 'Red sebebi zorunludur.');
+            return;
+        }
+
+        setReviewRequestLoading(true);
+        try {
+            await clubService.reviewRequest(reviewRequestModal.request.id, reviewRequestData);
+            toast.success('Başarılı', reviewRequestData.approve ? 'Kulüp başvurusu onaylandı!' : 'Kulüp başvurusu reddedildi.');
+            closeReviewRequestModal();
+            loadClubRequests();
+            // Kulüpler listesini de yenile (yeni kulüp oluşturulmuş olabilir)
+            if (reviewRequestData.approve && activeSection === 'clubs') {
+                loadClubs();
+            }
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Başvuru değerlendirilemedi.');
+        } finally {
+            setReviewRequestLoading(false);
+        }
+    };
+
     // Load user profile details
     const loadUserProfile = async (userId: number) => {
         setViewUserLoading(true);
@@ -1049,6 +1308,36 @@ const AdminPanel: React.FC = () => {
                         <History size={20} />
                         <span>İşlem Geçmişi</span>
                     </button>
+
+                    <div className="sidebar-group">
+                        <button
+                            className="sidebar-item group-header"
+                            onClick={() => setClubsExpanded(!clubsExpanded)}
+                        >
+                            <Building2 size={20} />
+                            <span>Kulüpler</span>
+                            {clubsExpanded ? <ChevronDown size={16} className="arrow" /> : <ChevronRight size={16} className="arrow" />}
+                        </button>
+
+                        {clubsExpanded && (
+                            <div className="sidebar-submenu">
+                                <button
+                                    className={`sidebar-item sub-item ${activeSection === 'clubs' ? 'active' : ''}`}
+                                    onClick={() => setActiveSection('clubs')}
+                                >
+                                    <Building2 size={18} />
+                                    <span>Kulüp Listesi</span>
+                                </button>
+                                <button
+                                    className={`sidebar-item sub-item ${activeSection === 'club-requests' ? 'active' : ''}`}
+                                    onClick={() => setActiveSection('club-requests')}
+                                >
+                                    <Flag size={18} />
+                                    <span>Kulüp Başvuruları</span>
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </nav>
 
                 <div className="sidebar-footer">
@@ -1857,6 +2146,533 @@ const AdminPanel: React.FC = () => {
                             </button>
                         </div>
                     </div>
+                </Modal>
+
+                {/* Club Create/Edit Modal */}
+                <Modal
+                    isOpen={clubModal.isOpen}
+                    onClose={closeClubModal}
+                    title={clubModal.mode === 'create' ? 'Yeni Kulüp Oluştur' : 'Kulüp Düzenle'}
+                >
+                    <div style={{ marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                            <div style={{
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: '8px',
+                                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: 'white'
+                            }}>
+                                <Building2 size={20} />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 600 }}>
+                                    {clubModal.mode === 'create' ? 'Yeni bir kulüp oluşturun ve topluluğunuzu büyütün' : 'Kulüp bilgilerini güncelleyin'}
+                                </h3>
+                            </div>
+                        </div>
+                    </div>
+                    <form onSubmit={clubModal.mode === 'create' ? handleCreateClub : handleUpdateClub} className="modal-form">
+                        <div style={{ 
+                            background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                            padding: '1rem',
+                            borderRadius: '8px',
+                            marginBottom: '1.5rem',
+                            border: '1px solid rgba(102, 126, 234, 0.2)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                <Info size={16} style={{ color: '#667eea' }} />
+                                <strong style={{ fontSize: '0.875rem', color: '#667eea' }}>Temel Bilgiler</strong>
+                            </div>
+                            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                Kulüp adı ve açıklaması ziyaretçiler tarafından görülebilir
+                            </p>
+                        </div>
+
+                        <div className="form-group">
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                <Building2 size={16} style={{ color: 'var(--primary)' }} />
+                                Kulüp Adı *
+                            </label>
+                            <input
+                                type="text"
+                                value={clubFormData.name}
+                                onChange={(e) => setClubFormData({ ...clubFormData, name: e.target.value })}
+                                placeholder="Örn: Teknoloji Kulübü"
+                                required
+                                minLength={2}
+                                maxLength={100}
+                                style={{ fontSize: '1rem', padding: '0.75rem' }}
+                            />
+                            <small style={{ display: 'block', marginTop: '0.25rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                                {clubFormData.name.length}/100 karakter
+                            </small>
+                        </div>
+
+                        <div className="form-group">
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                <FileText size={16} style={{ color: 'var(--primary)' }} />
+                                Açıklama
+                            </label>
+                            <textarea
+                                value={clubFormData.description}
+                                onChange={(e) => setClubFormData({ ...clubFormData, description: e.target.value })}
+                                placeholder="Kulüp hakkında detaylı bilgi verin..."
+                                rows={4}
+                                maxLength={500}
+                                style={{ fontSize: '1rem', padding: '0.75rem', resize: 'vertical' }}
+                            />
+                            <small style={{ display: 'block', marginTop: '0.25rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                                {clubFormData.description.length}/500 karakter
+                            </small>
+                        </div>
+
+                        {clubModal.mode === 'edit' && (
+                            <>
+                                <div style={{ 
+                                    background: 'rgba(59, 130, 246, 0.05)',
+                                    padding: '1rem',
+                                    borderRadius: '8px',
+                                    marginBottom: '1.5rem',
+                                    border: '1px solid rgba(59, 130, 246, 0.2)'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                        <Eye size={16} style={{ color: '#3b82f6' }} />
+                                        <strong style={{ fontSize: '0.875rem', color: '#3b82f6' }}>Görsel Ayarları</strong>
+                                    </div>
+                                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                        Logo ve banner görselleri kulüp sayfasında görüntülenecektir
+                                    </p>
+                                </div>
+
+                                <div className="form-group">
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                        <div style={{
+                                            width: '24px',
+                                            height: '24px',
+                                            borderRadius: '4px',
+                                            background: 'var(--primary)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: 'white'
+                                        }}>
+                                            <Building2 size={12} />
+                                        </div>
+                                        Logo URL
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={clubFormData.logoUrl || ''}
+                                        onChange={(e) => setClubFormData({ ...clubFormData, logoUrl: e.target.value || null })}
+                                        placeholder="https://example.com/logo.png"
+                                        style={{ fontSize: '1rem', padding: '0.75rem' }}
+                                    />
+                                    {clubFormData.logoUrl && (
+                                        <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                                            <img 
+                                                src={clubFormData.logoUrl} 
+                                                alt="Logo önizleme" 
+                                                style={{ maxWidth: '100px', maxHeight: '100px', borderRadius: '4px' }}
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="form-group">
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                        <div style={{
+                                            width: '24px',
+                                            height: '24px',
+                                            borderRadius: '4px',
+                                            background: 'var(--primary)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: 'white'
+                                        }}>
+                                            <FileText size={12} />
+                                        </div>
+                                        Banner URL
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={clubFormData.bannerUrl || ''}
+                                        onChange={(e) => setClubFormData({ ...clubFormData, bannerUrl: e.target.value || null })}
+                                        placeholder="https://example.com/banner.png"
+                                        style={{ fontSize: '1rem', padding: '0.75rem' }}
+                                    />
+                                    {clubFormData.bannerUrl && (
+                                        <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                                            <img 
+                                                src={clubFormData.bannerUrl} 
+                                                alt="Banner önizleme" 
+                                                style={{ maxWidth: '100%', maxHeight: '150px', borderRadius: '4px' }}
+                                                onError={(e) => {
+                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
+
+                        <div style={{ 
+                            background: 'rgba(16, 185, 129, 0.05)',
+                            padding: '1rem',
+                            borderRadius: '8px',
+                            marginBottom: '1.5rem',
+                            border: '1px solid rgba(16, 185, 129, 0.2)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                <Lock size={16} style={{ color: '#10b981' }} />
+                                <strong style={{ fontSize: '0.875rem', color: '#10b981' }}>Gizlilik ve Onay Ayarları</strong>
+                            </div>
+                            
+                            <div className="form-row" style={{ gap: '1rem' }}>
+                                <div className="form-group" style={{ 
+                                    flex: 1,
+                                    padding: '1rem',
+                                    background: 'white',
+                                    borderRadius: '8px',
+                                    border: `2px solid ${clubFormData.isPublic ? '#10b981' : 'var(--border-color)'}`,
+                                    transition: 'all 0.2s'
+                                }}>
+                                    <label className="checkbox-label" style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '0.75rem',
+                                        cursor: 'pointer',
+                                        margin: 0
+                                    }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={clubFormData.isPublic}
+                                            onChange={(e) => setClubFormData({ ...clubFormData, isPublic: e.target.checked })}
+                                            style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                                        />
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                                                <Unlock size={16} style={{ color: clubFormData.isPublic ? '#10b981' : 'var(--text-secondary)' }} />
+                                                <strong style={{ fontSize: '0.9rem' }}>Herkese Açık</strong>
+                                            </div>
+                                            <small style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '0.8rem', lineHeight: '1.4' }}>
+                                                Kulüp herkes tarafından görülebilir ve aranabilir
+                                            </small>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <div className="form-group" style={{ 
+                                    flex: 1,
+                                    padding: '1rem',
+                                    background: 'white',
+                                    borderRadius: '8px',
+                                    border: `2px solid ${clubFormData.requiresApproval ? '#f59e0b' : 'var(--border-color)'}`,
+                                    transition: 'all 0.2s'
+                                }}>
+                                    <label className="checkbox-label" style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '0.75rem',
+                                        cursor: 'pointer',
+                                        margin: 0
+                                    }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={clubFormData.requiresApproval}
+                                            onChange={(e) => setClubFormData({ ...clubFormData, requiresApproval: e.target.checked })}
+                                            style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                                        />
+                                        <div style={{ flex: 1 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                                                <Shield size={16} style={{ color: clubFormData.requiresApproval ? '#f59e0b' : 'var(--text-secondary)' }} />
+                                                <strong style={{ fontSize: '0.9rem' }}>Onay Gerekli</strong>
+                                            </div>
+                                            <small style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '0.8rem', lineHeight: '1.4' }}>
+                                                Yeni üyelikler için yönetici onayı gerekir
+                                            </small>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="modal-actions" style={{ 
+                            paddingTop: '1.5rem',
+                            borderTop: '1px solid var(--border-color)',
+                            display: 'flex',
+                            gap: '0.75rem',
+                            justifyContent: 'flex-end'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={closeClubModal}
+                                className="btn-secondary"
+                                disabled={clubFormLoading}
+                                style={{ minWidth: '100px' }}
+                            >
+                                İptal
+                            </button>
+                            <button
+                                type="submit"
+                                className="btn-primary"
+                                disabled={clubFormLoading}
+                                style={{ 
+                                    minWidth: '140px',
+                                    background: clubFormLoading ? 'var(--text-secondary)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                    border: 'none'
+                                }}
+                            >
+                                {clubFormLoading ? (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
+                                        <div className="loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></div>
+                                        Kaydediliyor...
+                                    </span>
+                                ) : (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
+                                        {clubModal.mode === 'create' ? (
+                                            <>
+                                                <Plus size={16} />
+                                                Oluştur
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle size={16} />
+                                                Güncelle
+                                            </>
+                                        )}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                    </form>
+                </Modal>
+
+                {/* Club Delete Modal */}
+                <Modal
+                    isOpen={deleteClubModal.isOpen}
+                    onClose={() => setDeleteClubModal({ isOpen: false, club: null })}
+                    title="Kulüp Sil"
+                >
+                    <div className="confirm-modal" style={{ padding: '1.5rem 0' }}>
+                        <div style={{
+                            width: '80px',
+                            height: '80px',
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            margin: '0 auto 1.5rem',
+                            border: '3px solid rgba(239, 68, 68, 0.2)'
+                        }}>
+                            <AlertTriangle size={40} style={{ color: '#ef4444' }} />
+                        </div>
+                        
+                        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+                            <h3 style={{ 
+                                margin: 0, 
+                                marginBottom: '0.75rem', 
+                                fontSize: '1.1rem',
+                                fontWeight: 600,
+                                color: 'var(--text-primary)'
+                            }}>
+                                <strong style={{ color: '#ef4444' }}>{deleteClubModal.club?.name}</strong> kulübünü silmek istediğinize emin misiniz?
+                            </h3>
+                            <div style={{
+                                background: 'rgba(239, 68, 68, 0.05)',
+                                padding: '1rem',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(239, 68, 68, 0.2)',
+                                textAlign: 'left',
+                                marginTop: '1rem'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                    <XCircle size={18} style={{ color: '#ef4444', marginTop: '2px', flexShrink: 0 }} />
+                                    <div>
+                                        <strong style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.9rem' }}>Bu işlem şunları içerir:</strong>
+                                        <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: '1.8' }}>
+                                            <li>Kulüp kalıcı olarak silinecek</li>
+                                            <li>Tüm üyelikler ve üye verileri silinecek</li>
+                                            <li>Kulüp içeriği (varsa) silinecek</li>
+                                            <li>Bu işlem geri alınamaz</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="modal-actions" style={{ 
+                            display: 'flex',
+                            gap: '0.75rem',
+                            justifyContent: 'flex-end',
+                            paddingTop: '1rem',
+                            borderTop: '1px solid var(--border-color)'
+                        }}>
+                            <button
+                                onClick={() => setDeleteClubModal({ isOpen: false, club: null })}
+                                className="btn-secondary"
+                                disabled={deleteClubLoading}
+                                style={{ minWidth: '100px' }}
+                            >
+                                İptal
+                            </button>
+                            <button
+                                onClick={handleDeleteClub}
+                                className="btn-danger"
+                                disabled={deleteClubLoading}
+                                style={{ 
+                                    minWidth: '140px',
+                                    background: deleteClubLoading ? 'var(--text-secondary)' : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                                    border: 'none'
+                                }}
+                            >
+                                {deleteClubLoading ? (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
+                                        <div className="loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></div>
+                                        Siliniyor...
+                                    </span>
+                                ) : (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
+                                        <Trash2 size={16} />
+                                        Evet, Sil
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </Modal>
+
+                {/* Review Club Request Modal */}
+                <Modal
+                    isOpen={reviewRequestModal.isOpen}
+                    onClose={closeReviewRequestModal}
+                    title={reviewRequestData.approve ? 'Kulüp Başvurusunu Onayla' : 'Kulüp Başvurusunu Reddet'}
+                >
+                    <form onSubmit={handleReviewRequest} className="modal-form">
+                        {reviewRequestModal.request && (
+                            <>
+                                <div style={{ 
+                                    background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                                    padding: '1rem',
+                                    borderRadius: '8px',
+                                    marginBottom: '1.5rem',
+                                    border: '1px solid rgba(102, 126, 234, 0.2)'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                        <Building2 size={16} style={{ color: '#667eea' }} />
+                                        <strong style={{ fontSize: '0.875rem', color: '#667eea' }}>Başvuru Detayları</strong>
+                                    </div>
+                                    <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.875rem' }}>
+                                        <div><strong>Kulüp Adı:</strong> {reviewRequestModal.request.name}</div>
+                                        <div><strong>Başvuran:</strong> @{reviewRequestModal.request.requestedByUsername}</div>
+                                        <div><strong>Açıklama:</strong> {reviewRequestModal.request.description || '-'}</div>
+                                        <div><strong>Amaç:</strong> {reviewRequestModal.request.purpose || '-'}</div>
+                                        <div><strong>Tarih:</strong> {formatDate(reviewRequestModal.request.createdAt)}</div>
+                                    </div>
+                                </div>
+
+                                {!reviewRequestData.approve && (
+                                    <div className="form-group">
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                            <AlertTriangle size={16} style={{ color: '#ef4444' }} />
+                                            Red Sebebi *
+                                        </label>
+                                        <textarea
+                                            value={reviewRequestData.rejectionReason || ''}
+                                            onChange={(e) => setReviewRequestData({ ...reviewRequestData, rejectionReason: e.target.value })}
+                                            placeholder="Başvurunun neden reddedildiğini açıklayın..."
+                                            rows={4}
+                                            required={!reviewRequestData.approve}
+                                            style={{ fontSize: '1rem', padding: '0.75rem', resize: 'vertical' }}
+                                        />
+                                        <small style={{ display: 'block', marginTop: '0.25rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                                            Red sebebi başvuran kullanıcıya gösterilecektir
+                                        </small>
+                                    </div>
+                                )}
+
+                                {reviewRequestData.approve && (
+                                    <div style={{ 
+                                        background: 'rgba(16, 185, 129, 0.05)',
+                                        padding: '1rem',
+                                        borderRadius: '8px',
+                                        marginBottom: '1.5rem',
+                                        border: '1px solid rgba(16, 185, 129, 0.2)'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                            <CheckCircle size={16} style={{ color: '#10b981' }} />
+                                            <strong style={{ fontSize: '0.875rem', color: '#10b981' }}>Onaylandığında</strong>
+                                        </div>
+                                        <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                                            Bu başvuru onaylandığında yeni bir kulüp oluşturulacak ve başvuran kullanıcı kulübün kurucusu olacaktır.
+                                        </p>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
+                        <div className="modal-actions" style={{ 
+                            paddingTop: '1.5rem',
+                            borderTop: '1px solid var(--border-color)',
+                            display: 'flex',
+                            gap: '0.75rem',
+                            justifyContent: 'flex-end'
+                        }}>
+                            <button
+                                type="button"
+                                onClick={closeReviewRequestModal}
+                                className="btn-secondary"
+                                disabled={reviewRequestLoading}
+                                style={{ minWidth: '100px' }}
+                            >
+                                İptal
+                            </button>
+                            <button
+                                type="submit"
+                                className={reviewRequestData.approve ? 'btn-primary' : 'btn-danger'}
+                                disabled={reviewRequestLoading}
+                                style={{ 
+                                    minWidth: '140px',
+                                    background: reviewRequestLoading 
+                                        ? 'var(--text-secondary)' 
+                                        : reviewRequestData.approve
+                                            ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                                            : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                                    border: 'none'
+                                }}
+                            >
+                                {reviewRequestLoading ? (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
+                                        <div className="loading-spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></div>
+                                        İşleniyor...
+                                    </span>
+                                ) : (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', justifyContent: 'center' }}>
+                                        {reviewRequestData.approve ? (
+                                            <>
+                                                <CheckCircle size={16} />
+                                                Onayla
+                                            </>
+                                        ) : (
+                                            <>
+                                                <XCircle size={16} />
+                                                Reddet
+                                            </>
+                                        )}
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+                    </form>
                 </Modal>
 
                 {/* Ban Section */}
@@ -2778,6 +3594,279 @@ const AdminPanel: React.FC = () => {
                         </div>
                     )
                 }
+
+                {/* Clubs Section */}
+                {activeSection === 'clubs' && (
+                    <div className="admin-section">
+                        <div className="section-header">
+                            <h1><Building2 size={28} /> Kulüp Yönetimi</h1>
+                            <p>Kulüpleri görüntüleyin, oluşturun, düzenleyin veya silin</p>
+                        </div>
+
+                        <div className="section-actions">
+                            <form onSubmit={handleClubListSearch} className="search-form">
+                                <input
+                                    type="text"
+                                    placeholder="Kulüp ara (isim veya açıklama)..."
+                                    value={clubsSearch}
+                                    onChange={(e) => setClubsSearch(e.target.value)}
+                                />
+                                <button type="submit" className="btn-primary" disabled={clubsLoading}>
+                                    <Search size={16} />
+                                    Ara
+                                </button>
+                            </form>
+                            <button className="btn-success" onClick={openCreateClubModal}>
+                                <Plus size={16} />
+                                Yeni Kulüp
+                            </button>
+                        </div>
+
+                        <div className="content-card">
+                            <div className="card-header">
+                                <Building2 size={20} />
+                                <h3>Kulüp Listesi</h3>
+                                <span className="badge">{clubsTotalCount} kulüp</span>
+                            </div>
+
+                            {clubsLoading ? (
+                                <div className="loading-state">Yükleniyor...</div>
+                            ) : clubs.length === 0 ? (
+                                <div className="empty-state">
+                                    <Building2 size={48} />
+                                    <p>Kulüp bulunamadı.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="user-table">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Kulüp Adı</th>
+                                                    <th>Açıklama</th>
+                                                    <th>Kurucu</th>
+                                                    <th>Üye Sayısı</th>
+                                                    <th>Durum</th>
+                                                    <th>İşlemler</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {clubs.map((club) => (
+                                                    <tr key={club.id}>
+                                                        <td>
+                                                            <div className="user-cell">
+                                                                {club.logoUrl ? (
+                                                                    <img
+                                                                        src={club.logoUrl}
+                                                                        alt={club.name}
+                                                                        className="user-avatar"
+                                                                    />
+                                                                ) : (
+                                                                    <div className="user-avatar" style={{ background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                        {club.name.charAt(0).toUpperCase()}
+                                                                    </div>
+                                                                )}
+                                                                <div>
+                                                                    <strong>{club.name}</strong>
+                                                                    <br />
+                                                                    <small style={{ color: 'var(--text-secondary)' }}>@{club.slug}</small>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div style={{ maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {club.description || '-'}
+                                                            </div>
+                                                        </td>
+                                                        <td>@{club.founderUsername}</td>
+                                                        <td>{club.memberCount}</td>
+                                                        <td>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                                                                <span className={`status-badge ${club.isPublic ? 'success' : 'warning'}`}>
+                                                                    {club.isPublic ? 'Herkese Açık' : 'Özel'}
+                                                                </span>
+                                                                <span className={`status-badge ${club.requiresApproval ? 'warning' : 'success'}`}>
+                                                                    {club.requiresApproval ? 'Onay Gerekli' : 'Otomatik'}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div className="action-buttons">
+                                                                <button
+                                                                    className="btn-icon edit"
+                                                                    onClick={() => openEditClubModal(club)}
+                                                                    title="Düzenle"
+                                                                >
+                                                                    <Pencil size={16} />
+                                                                </button>
+                                                                <button
+                                                                    className="btn-icon delete"
+                                                                    onClick={() => setDeleteClubModal({ isOpen: true, club })}
+                                                                    title="Sil"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Pagination */}
+                                    {clubsTotalPages > 1 && (
+                                        <div className="pagination">
+                                            <button
+                                                onClick={() => {
+                                                    setClubsPage(clubsPage - 1);
+                                                }}
+                                                disabled={clubsPage <= 1 || clubsLoading}
+                                                className="btn-secondary"
+                                            >
+                                                <ChevronLeft size={16} /> Önceki
+                                            </button>
+                                            <span className="page-info">
+                                                Sayfa {clubsPage} / {clubsTotalPages}
+                                            </span>
+                                            <button
+                                                onClick={() => {
+                                                    setClubsPage(clubsPage + 1);
+                                                }}
+                                                disabled={clubsPage >= clubsTotalPages || clubsLoading}
+                                                className="btn-secondary"
+                                            >
+                                                Sonraki <ChevronRight size={16} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Club Requests Section */}
+                {activeSection === 'club-requests' && (
+                    <div className="admin-section">
+                        <div className="section-header">
+                            <h1><Flag size={28} /> Kulüp Başvuruları</h1>
+                            <p>Bekleyen kulüp oluşturma başvurularını inceleyin ve değerlendirin</p>
+                        </div>
+
+                        <div className="content-card">
+                            <div className="card-header">
+                                <Flag size={20} />
+                                <h3>Bekleyen Başvurular</h3>
+                                <span className="badge">{clubRequestsTotalCount} başvuru</span>
+                            </div>
+
+                            {clubRequestsLoading ? (
+                                <div className="loading-state">Yükleniyor...</div>
+                            ) : clubRequests.length === 0 ? (
+                                <div className="empty-state">
+                                    <Flag size={48} />
+                                    <p>Bekleyen kulüp başvurusu bulunmuyor.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="user-table">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Kulüp Adı</th>
+                                                    <th>Başvuran</th>
+                                                    <th>Açıklama</th>
+                                                    <th>Amaç</th>
+                                                    <th>Tarih</th>
+                                                    <th>İşlemler</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {clubRequests.map((request) => (
+                                                    <tr key={request.id}>
+                                                        <td>
+                                                            <strong>{request.name}</strong>
+                                                        </td>
+                                                        <td>
+                                                            <div className="user-cell">
+                                                                <div className="user-avatar" style={{ background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                    {request.requestedByUsername.charAt(0).toUpperCase()}
+                                                                </div>
+                                                                <span>@{request.requestedByUsername}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {request.description || '-'}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {request.purpose || '-'}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                                                                {formatDate(request.createdAt)}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <div className="action-buttons">
+                                                                <button
+                                                                    className="btn-icon edit"
+                                                                    onClick={() => openReviewRequestModal(request, true)}
+                                                                    title="Onayla"
+                                                                    style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}
+                                                                >
+                                                                    <CheckCircle size={16} />
+                                                                </button>
+                                                                <button
+                                                                    className="btn-icon delete"
+                                                                    onClick={() => openReviewRequestModal(request, false)}
+                                                                    title="Reddet"
+                                                                >
+                                                                    <XCircle size={16} />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Pagination */}
+                                    {clubRequestsTotalPages > 1 && (
+                                        <div className="pagination">
+                                            <button
+                                                onClick={() => {
+                                                    setClubRequestsPage(clubRequestsPage - 1);
+                                                }}
+                                                disabled={clubRequestsPage <= 1 || clubRequestsLoading}
+                                                className="btn-secondary"
+                                            >
+                                                <ChevronLeft size={16} /> Önceki
+                                            </button>
+                                            <span className="page-info">
+                                                Sayfa {clubRequestsPage} / {clubRequestsTotalPages}
+                                            </span>
+                                            <button
+                                                onClick={() => {
+                                                    setClubRequestsPage(clubRequestsPage + 1);
+                                                }}
+                                                disabled={clubRequestsPage >= clubRequestsTotalPages || clubRequestsLoading}
+                                                className="btn-secondary"
+                                            >
+                                                Sonraki <ChevronRight size={16} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
             </main >
 
             <Modal

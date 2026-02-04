@@ -23,6 +23,7 @@ export interface Thread {
     isSolved: boolean;
     userId: number;
     categoryId: number;
+    clubId?: number | null; // Kulüp ID'si (null ise genel forum konusu)
     createdAt: string;
     updatedAt: string;
     // API'den gelen user ve category objeleri
@@ -54,6 +55,7 @@ export interface CreateThreadDto {
     title: string;
     content: string;
     categoryId: number;
+    clubId?: number | null; // Kulüp ID'si (null ise genel forum konusu)
 }
 
 export interface UpdateThreadDto {
@@ -69,6 +71,7 @@ export interface ThreadFilterParams {
     pageSize?: number;
     q?: string;
     categoryId?: number;
+    clubId?: number; // Kulüp bazlı filtreleme
     isSolved?: boolean;
     userId?: number;
     sortBy?: string;
