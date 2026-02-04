@@ -128,8 +128,23 @@ async function request<T>(endpoint: string, options: RequestOptions, isRetry: bo
 
   if (!response.ok) {
     // Try to extract error message from backend structure
-    // Backend validation errors might be in "errors" object or "message" string
-    throw new Error(typeof data === 'string' ? data : data.message || JSON.stringify(data) || 'Bir hata olustu');
+    // Backend validation errors might be in "errors" array or "message" string
+    if (typeof data === 'object' && data !== null) {
+      // Check if it's a validation error with errors array
+      if (Array.isArray((data as any).errors) && (data as any).errors.length > 0) {
+        const errorMessages = (data as any).errors.map((err: any) => 
+          err.error || `${err.field}: ${err.error || 'Geçersiz değer'}`
+        ).join('\n');
+        const error = new Error((data as any).message || 'Validation hatası');
+        (error as any).validationErrors = (data as any).errors;
+        (error as any).formattedMessage = errorMessages;
+        throw error;
+      }
+      // Regular error with message
+      throw new Error((data as any).message || JSON.stringify(data) || 'Bir hata olustu');
+    }
+    // String error
+    throw new Error(typeof data === 'string' ? data : 'Bir hata olustu');
   }
 
   // Parse text response as generic T if possible, or wrap it

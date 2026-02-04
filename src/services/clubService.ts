@@ -117,6 +117,14 @@ export const clubService = {
         });
     },
 
+    /**
+     * Get user's own club requests
+     * GET /api/Club/requests/get-mine
+     */
+    getMyRequests: async (): Promise<ClubRequest[]> => {
+        return api.get<ClubRequest[]>('/Club/requests/get-mine');
+    },
+
     // ========== CLUB MEMBERSHIP ENDPOINTS ==========
 
     /**

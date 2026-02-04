@@ -35,9 +35,11 @@ const ClubManage: React.FC = () => {
     const toast = useToast();
 
     const [club, setClub] = useState<Club | null>(null);
-    const [members, setMembers] = useState<ClubMembership[]>([]);
+    const [members, setMembers] = useState<ClubMembership[]>([]); // Filtrelenmiş üyeler (görüntüleme için)
+    const [allMembers, setAllMembers] = useState<ClubMembership[]>([]); // Tüm üyeler (istatistikler için)
     const [loading, setLoading] = useState(true);
     const [membersLoading, setMembersLoading] = useState(false);
+    const [statsLoading, setStatsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     // Pagination
@@ -73,8 +75,16 @@ const ClubManage: React.FC = () => {
     useEffect(() => {
         if (id && club) {
             loadMembers();
+            loadAllMembersForStats(); // İstatistikler için tüm üyeleri yükle
         }
     }, [id, club, page, statusFilter]);
+
+    // Search query değiştiğinde sadece görüntülenen listeyi filtrele
+    useEffect(() => {
+        if (members.length > 0 || searchQuery.trim()) {
+            filterMembersBySearch();
+        }
+    }, [searchQuery]);
 
     const loadClub = async () => {
         if (!id) return;
@@ -98,6 +108,27 @@ const ClubManage: React.FC = () => {
         }
     };
 
+    // Tüm üyeleri yükle (istatistikler için - filtre olmadan)
+    const loadAllMembersForStats = async () => {
+        if (!id || !club) return;
+        setStatsLoading(true);
+        try {
+            // Tüm üyeleri yükle (status filter olmadan, sayfalama olmadan)
+            const response = await clubService.getMembers(
+                parseInt(id),
+                1,
+                1000, // Büyük sayfa boyutu ile tüm üyeleri al
+                undefined // Status filter yok
+            );
+            setAllMembers(response.items);
+        } catch (error: any) {
+            console.error('İstatistikler yüklenemedi:', error);
+        } finally {
+            setStatsLoading(false);
+        }
+    };
+
+    // Görüntüleme için üyeleri yükle (filtrelenmiş)
     const loadMembers = async () => {
         if (!id || !club) return;
         setMembersLoading(true);
@@ -110,24 +141,52 @@ const ClubManage: React.FC = () => {
                 status
             );
             
-            // Filter by search query if provided
-            let filteredMembers = response.items;
-            if (searchQuery.trim()) {
-                const query = searchQuery.toLowerCase();
-                filteredMembers = response.items.filter(member =>
-                    member.username.toLowerCase().includes(query) ||
-                    member.firstName.toLowerCase().includes(query) ||
-                    member.lastName.toLowerCase().includes(query)
-                );
-            }
-            
-            setMembers(filteredMembers);
+            setMembers(response.items);
             setTotalPages(response.totalPages);
             setTotalCount(response.totalCount);
+            
+            // Search query varsa filtrele
+            filterMembersBySearch(response.items);
         } catch (error: any) {
             toast.error('Hata', error.message || 'Üyeler yüklenemedi.');
         } finally {
             setMembersLoading(false);
+        }
+    };
+
+    // Search query'ye göre üyeleri filtrele
+    const filterMembersBySearch = (membersToFilter?: ClubMembership[]) => {
+        // Eğer status filter varsa, önce status'a göre filtrelenmiş üyeleri al
+        // Sonra search query'ye göre filtrele
+        if (membersToFilter) {
+            // loadMembers'den geldi, zaten status'a göre filtrelenmiş
+            if (!searchQuery.trim()) {
+                setMembers(membersToFilter);
+                return;
+            }
+            
+            const query = searchQuery.toLowerCase();
+            const filtered = membersToFilter.filter(member =>
+                member.username.toLowerCase().includes(query) ||
+                member.firstName.toLowerCase().includes(query) ||
+                member.lastName.toLowerCase().includes(query)
+            );
+            setMembers(filtered);
+        } else {
+            // Search query değişti, mevcut members listesini filtrele
+            if (!searchQuery.trim()) {
+                // Search temizlendi, status filter'a göre yeniden yükle
+                loadMembers();
+                return;
+            }
+            
+            const query = searchQuery.toLowerCase();
+            const filtered = members.filter(member =>
+                member.username.toLowerCase().includes(query) ||
+                member.firstName.toLowerCase().includes(query) ||
+                member.lastName.toLowerCase().includes(query)
+            );
+            setMembers(filtered);
         }
     };
 
@@ -177,6 +236,7 @@ const ClubManage: React.FC = () => {
             setSelectedMember(null);
             setActionType(null);
             await loadMembers();
+            await loadAllMembersForStats(); // İstatistikleri yenile
             await loadClub(); // Refresh club data
         } catch (error: any) {
             toast.error('Hata', error.message || 'İşlem gerçekleştirilemedi.');
@@ -230,8 +290,10 @@ const ClubManage: React.FC = () => {
         );
     }
 
-    const pendingMembers = members.filter(m => m.status === MembershipStatusEnum.Pending);
-    const approvedMembers = members.filter(m => m.status === MembershipStatusEnum.Approved);
+    // İstatistikler için tüm üyeleri kullan (filtre olmadan)
+    const pendingMembers = allMembers.filter(m => m.status === MembershipStatusEnum.Pending);
+    const approvedMembers = allMembers.filter(m => m.status === MembershipStatusEnum.Approved);
+    const totalMembersCount = allMembers.length;
 
     return (
         <div className="home-container">
@@ -401,7 +463,7 @@ const ClubManage: React.FC = () => {
                                     <strong style={{ fontSize: '0.875rem', color: '#6366f1' }}>Toplam Üye</strong>
                                 </div>
                                 <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: '#6366f1' }}>
-                                    {totalCount}
+                                    {totalMembersCount}
                                 </p>
                             </div>
                         </div>
@@ -513,7 +575,20 @@ const ClubManage: React.FC = () => {
                                                             fontWeight: 500,
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            gap: '0.5rem'
+                                                            gap: '0.5rem',
+                                                            transition: 'all 0.2s ease'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)';
+                                                            e.currentTarget.style.borderColor = '#10b981';
+                                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.2)';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)';
+                                                            e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                                                            e.currentTarget.style.transform = 'translateY(0)';
+                                                            e.currentTarget.style.boxShadow = 'none';
                                                         }}
                                                     >
                                                         <CheckCircle size={16} />
@@ -532,7 +607,20 @@ const ClubManage: React.FC = () => {
                                                             fontWeight: 500,
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            gap: '0.5rem'
+                                                            gap: '0.5rem',
+                                                            transition: 'all 0.2s ease'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                                                            e.currentTarget.style.borderColor = '#ef4444';
+                                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.2)';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                                                            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                                                            e.currentTarget.style.transform = 'translateY(0)';
+                                                            e.currentTarget.style.boxShadow = 'none';
                                                         }}
                                                     >
                                                         <X size={16} />
@@ -555,7 +643,20 @@ const ClubManage: React.FC = () => {
                                                             fontWeight: 500,
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            gap: '0.5rem'
+                                                            gap: '0.5rem',
+                                                            transition: 'all 0.2s ease'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            e.currentTarget.style.background = 'rgba(99, 102, 241, 0.2)';
+                                                            e.currentTarget.style.borderColor = '#6366f1';
+                                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(99, 102, 241, 0.2)';
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.background = 'rgba(99, 102, 241, 0.1)';
+                                                            e.currentTarget.style.borderColor = 'rgba(99, 102, 241, 0.3)';
+                                                            e.currentTarget.style.transform = 'translateY(0)';
+                                                            e.currentTarget.style.boxShadow = 'none';
                                                         }}
                                                     >
                                                         <Shield size={16} />
@@ -575,7 +676,20 @@ const ClubManage: React.FC = () => {
                                                                 fontWeight: 500,
                                                                 display: 'flex',
                                                                 alignItems: 'center',
-                                                                gap: '0.5rem'
+                                                                gap: '0.5rem',
+                                                                transition: 'all 0.2s ease'
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+                                                                e.currentTarget.style.borderColor = '#ef4444';
+                                                                e.currentTarget.style.transform = 'translateY(-1px)';
+                                                                e.currentTarget.style.boxShadow = '0 2px 8px rgba(239, 68, 68, 0.2)';
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                                                                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                                                                e.currentTarget.style.transform = 'translateY(0)';
+                                                                e.currentTarget.style.boxShadow = 'none';
                                                             }}
                                                         >
                                                             <UserX size={16} />
@@ -603,7 +717,20 @@ const ClubManage: React.FC = () => {
                                     onClick={() => setPage(p => Math.max(1, p - 1))}
                                     disabled={page === 1}
                                     className="btn-secondary"
-                                    style={{ padding: '0.5rem 1rem' }}
+                                    style={{ 
+                                        padding: '0.5rem 1rem',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (page !== 1) {
+                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
                                 >
                                     Önceki
                                 </button>
@@ -614,7 +741,20 @@ const ClubManage: React.FC = () => {
                                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                                     disabled={page === totalPages}
                                     className="btn-secondary"
-                                    style={{ padding: '0.5rem 1rem' }}
+                                    style={{ 
+                                        padding: '0.5rem 1rem',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (page !== totalPages) {
+                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
                                 >
                                     Sonraki
                                 </button>
@@ -693,6 +833,19 @@ const ClubManage: React.FC = () => {
                                     }}
                                     className="btn-secondary"
                                     disabled={actionLoading}
+                                    style={{
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!actionLoading) {
+                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
                                 >
                                     İptal
                                 </button>
@@ -701,6 +854,19 @@ const ClubManage: React.FC = () => {
                                     onClick={confirmAction}
                                     className={actionType === 'kick' || actionType === 'reject' ? 'btn-danger' : 'btn-primary'}
                                     disabled={actionLoading}
+                                    style={{
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!actionLoading) {
+                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
                                 >
                                     {actionLoading ? 'İşleniyor...' : (
                                         actionType === 'approve' ? 'Onayla' :
@@ -773,6 +939,19 @@ const ClubManage: React.FC = () => {
                                     }}
                                     className="btn-secondary"
                                     disabled={actionLoading}
+                                    style={{
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!actionLoading) {
+                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.1)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
                                 >
                                     İptal
                                 </button>
@@ -781,6 +960,19 @@ const ClubManage: React.FC = () => {
                                     onClick={confirmAction}
                                     className="btn-primary"
                                     disabled={actionLoading || newRole === selectedMember.role}
+                                    style={{
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        if (!actionLoading && newRole !== selectedMember?.role) {
+                                            e.currentTarget.style.transform = 'translateY(-1px)';
+                                            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+                                        }
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
                                 >
                                     {actionLoading ? 'Güncelleniyor...' : 'Güncelle'}
                                 </button>

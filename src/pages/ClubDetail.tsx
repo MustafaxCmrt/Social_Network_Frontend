@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Building2, Users, MessageSquare, FileText, ArrowLeft, Plus, LogOut, CheckCircle, AlertCircle, Camera, Upload, X, Settings } from 'lucide-react';
+import { Building2, Users, MessageSquare, FileText, ArrowLeft, Plus, LogOut, CheckCircle, AlertCircle, Camera, Upload, X, Settings, Clock, XCircle } from 'lucide-react';
 import { clubService } from '../services/clubService';
 import { threadService } from '../services/threadService';
-import type { Club } from '../types/club';
+import type { Club, ClubRequest } from '../types/club';
 import type { Thread, CreateThreadDto } from '../types/thread';
-import { ClubRole } from '../types/club';
+import { ClubRole, ClubRequestStatus, getClubRequestStatusText } from '../types/club';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Modal } from '../components/UI/Modal';
@@ -24,6 +24,8 @@ const ClubDetail: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [threadsLoading, setThreadsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [myClubRequests, setMyClubRequests] = useState<ClubRequest[]>([]);
+    const [requestsLoading, setRequestsLoading] = useState(false);
 
     // Check if user is admin/moderator or club president
     const isAdminOrPresident = user && club && (
@@ -55,6 +57,7 @@ const ClubDetail: React.FC = () => {
         if (id) {
             loadClub();
             loadThreads();
+            loadMyClubRequests();
         }
     }, [id]);
 
@@ -100,6 +103,21 @@ const ClubDetail: React.FC = () => {
             toast.error('Hata', 'Konular yüklenirken bir hata oluştu.');
         } finally {
             setThreadsLoading(false);
+        }
+    };
+
+    const loadMyClubRequests = async () => {
+        if (!user) return;
+        setRequestsLoading(true);
+        try {
+            const requests = await clubService.getMyRequests();
+            setMyClubRequests(requests);
+        } catch (error: any) {
+            // Silently fail if endpoint doesn't exist yet
+            console.error('Failed to load club requests:', error);
+            setMyClubRequests([]);
+        } finally {
+            setRequestsLoading(false);
         }
     };
 
@@ -249,6 +267,117 @@ const ClubDetail: React.FC = () => {
                     </p>
                     <button className="btn-primary" onClick={() => navigate('/')}>
                         Ana Sayfaya Dön
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    // Check if user has a pending/rejected request for this club
+    const pendingRequest = myClubRequests.find(req => 
+        req.name.toLowerCase() === club.name.toLowerCase() && 
+        req.status !== ClubRequestStatus.Approved
+    );
+
+    // If user has a pending/rejected request, show status only
+    if (pendingRequest && !checkIsAdminOrModerator(user)) {
+        const statusColor = pendingRequest.status === ClubRequestStatus.Rejected 
+            ? '#ef4444' 
+            : '#f59e0b';
+        const statusBg = pendingRequest.status === ClubRequestStatus.Rejected 
+            ? 'rgba(239, 68, 68, 0.1)' 
+            : 'rgba(245, 158, 11, 0.1)';
+        const StatusIcon = pendingRequest.status === ClubRequestStatus.Rejected 
+            ? XCircle 
+            : Clock;
+
+        return (
+            <div className="home-container">
+                <div style={{ 
+                    padding: '3rem 2rem',
+                    textAlign: 'center',
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--navbar-border)',
+                    borderRadius: '20px',
+                    maxWidth: '600px',
+                    margin: '0 auto'
+                }}>
+                    <Building2 size={64} style={{ opacity: 0.3, marginBottom: '1rem', color: 'var(--text-secondary)' }} />
+                    <h2 style={{ margin: '0 0 1rem 0', fontSize: '1.75rem', fontWeight: 600 }}>
+                        {club.name}
+                    </h2>
+                    <div style={{
+                        marginBottom: '1.5rem',
+                        padding: '1rem',
+                        borderRadius: '12px',
+                        background: statusBg,
+                        border: `1px solid ${statusColor}40`
+                    }}>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.75rem',
+                            marginBottom: '0.5rem'
+                        }}>
+                            <StatusIcon size={24} style={{ color: statusColor }} />
+                            <span style={{
+                                fontSize: '1.125rem',
+                                fontWeight: 600,
+                                color: statusColor
+                            }}>
+                                {getClubRequestStatusText(pendingRequest.status)}
+                            </span>
+                        </div>
+                        <p style={{
+                            margin: 0,
+                            fontSize: '0.875rem',
+                            color: 'var(--text-secondary)'
+                        }}>
+                            {pendingRequest.status === ClubRequestStatus.Pending
+                                ? 'Kulüp açma başvurunuz inceleniyor. Onaylandıktan sonra kulüp detaylarına erişebilirsiniz.'
+                                : 'Kulüp açma başvurunuz reddedildi. Detaylar için aşağıdaki bilgilere bakabilirsiniz.'}
+                        </p>
+                    </div>
+                    {pendingRequest.rejectionReason && (
+                        <div style={{
+                            marginBottom: '1.5rem',
+                            padding: '1rem',
+                            borderRadius: '12px',
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            border: '1px solid rgba(239, 68, 68, 0.2)',
+                            textAlign: 'left'
+                        }}>
+                            <p style={{
+                                margin: 0,
+                                fontSize: '0.875rem',
+                                color: '#ef4444',
+                                fontWeight: 500
+                            }}>
+                                <strong>Red Nedeni:</strong> {pendingRequest.rejectionReason}
+                            </p>
+                        </div>
+                    )}
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.75rem',
+                        fontSize: '0.875rem',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '1.5rem'
+                    }}>
+                        <span>Başvuru Tarihi: {new Date(pendingRequest.createdAt).toLocaleDateString('tr-TR')}</span>
+                        {pendingRequest.reviewedAt && (
+                            <span>İnceleme Tarihi: {new Date(pendingRequest.reviewedAt).toLocaleDateString('tr-TR')}</span>
+                        )}
+                    </div>
+                    <button 
+                        className="btn-primary"
+                        onClick={() => navigate('/my-clubs')}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
+                    >
+                        <Building2 size={16} />
+                        Kulüplerime Dön
                     </button>
                 </div>
             </div>
