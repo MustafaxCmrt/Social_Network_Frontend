@@ -13,7 +13,10 @@ import type {
     ClubMembersListResponse,
     MembershipActionDto,
     UpdateMembershipRoleDto,
-    MembershipStatus
+    MembershipStatus,
+    ClubApplicationListResponse,
+    UpdateApplicationStatusDto,
+    ClubApplicationStatus
 } from '../types/club';
 
 export const clubService = {
@@ -123,6 +126,31 @@ export const clubService = {
      */
     getMyRequests: async (): Promise<ClubRequest[]> => {
         return api.get<ClubRequest[]>('/Club/requests/get-mine');
+    },
+
+    /**
+     * Get user's club applications (join requests)
+     * GET /api/Club/my-applications
+     */
+    getMyApplications: async (page: number = 1, pageSize: number = 10, status?: ClubApplicationStatus): Promise<ClubApplicationListResponse> => {
+        const params = new URLSearchParams({
+            page: page.toString(),
+            pageSize: pageSize.toString(),
+        });
+        
+        if (status !== undefined) {
+            params.append('status', status.toString());
+        }
+        
+        return api.get<ClubApplicationListResponse>(`/Club/my-applications?${params.toString()}`);
+    },
+
+    /**
+     * Update club application status
+     * PATCH /api/Club/{id}/application-status
+     */
+    updateApplicationStatus: async (clubId: number, data: UpdateApplicationStatusDto): Promise<void> => {
+        return api.patch<void>(`/Club/${clubId}/application-status`, data);
     },
 
     // ========== CLUB MEMBERSHIP ENDPOINTS ==========

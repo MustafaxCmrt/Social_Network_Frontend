@@ -34,6 +34,15 @@ export const ClubRequestStatus = {
 
 export type ClubRequestStatus = typeof ClubRequestStatus[keyof typeof ClubRequestStatus];
 
+// Club Application Status (for club applications/join requests)
+export const ClubApplicationStatus = {
+    Pending: 0,
+    Approved: 1,
+    Rejected: 2
+} as const;
+
+export type ClubApplicationStatus = typeof ClubApplicationStatus[keyof typeof ClubApplicationStatus];
+
 // Helper functions for enum display
 export const getMembershipStatusText = (status: MembershipStatus): string => {
     switch (status) {
@@ -74,6 +83,19 @@ export const getClubRequestStatusText = (status: ClubRequestStatus): string => {
         case ClubRequestStatus.Approved:
             return 'Onaylandı';
         case ClubRequestStatus.Rejected:
+            return 'Reddedildi';
+        default:
+            return 'Bilinmeyen';
+    }
+};
+
+export const getClubApplicationStatusText = (status: ClubApplicationStatus): string => {
+    switch (status) {
+        case ClubApplicationStatus.Pending:
+            return 'Beklemede';
+        case ClubApplicationStatus.Approved:
+            return 'Onaylandı';
+        case ClubApplicationStatus.Rejected:
             return 'Reddedildi';
         default:
             return 'Bilinmeyen';
@@ -208,4 +230,34 @@ export interface MembershipActionDto {
 export interface UpdateMembershipRoleDto {
     membershipId: number;
     newRole: ClubRole;
+}
+
+// Club Application Types (for my-applications endpoint)
+export interface ClubApplication {
+    id: number;
+    name: string;
+    slug: string;
+    description: string;
+    logoUrl: string | null;
+    memberCount: number;
+    isPublic: boolean;
+    founderId: number;
+    founderUsername: string;
+    applicationStatus: ClubApplicationStatus;
+    rejectionReason: string | null;
+    reviewedAt: string | null;
+}
+
+export interface ClubApplicationListResponse {
+    items: ClubApplication[];
+    page: number;
+    pageSize: number;
+    totalCount: number;
+    totalPages: number;
+}
+
+// Update Application Status DTO
+export interface UpdateApplicationStatusDto {
+    status: ClubApplicationStatus;
+    rejectionReason?: string | null;
 }
