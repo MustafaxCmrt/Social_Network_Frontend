@@ -193,6 +193,9 @@ export interface ClubMembership {
     status: MembershipStatus;
     joinedAt: string | null;
     joinNote: string | null;
+    // Optional fields for pending memberships endpoint
+    clubId?: number;
+    clubName?: string;
 }
 
 export interface JoinClubDto {

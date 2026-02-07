@@ -200,6 +200,19 @@ export const clubService = {
     },
 
     /**
+     * Get all pending club membership applications (admin)
+     * GET /api/Club/memberships/pending
+     */
+    getPendingMemberships: async (page: number = 1, pageSize: number = 20): Promise<ClubMembersListResponse> => {
+        const params = new URLSearchParams({
+            page: page.toString(),
+            pageSize: pageSize.toString(),
+        });
+        
+        return api.get<ClubMembersListResponse>(`/Club/memberships/pending?${params.toString()}`);
+    },
+
+    /**
      * Perform membership action (approve/reject/kick)
      * PUT /api/Club/memberships/{membershipId}
      */

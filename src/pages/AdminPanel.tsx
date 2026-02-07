@@ -14,7 +14,8 @@ import type { AuditLogItem, AuditLogFilters } from '../services/auditLogService'
 import type { UserListItem, UserProfile, UserThreadListItem, UserPostListItem } from '../services/userService';
 import type { Report, UpdateReportStatusDto } from '../types/report';
 import { ReportStatus, getReportReasonText, getReportStatusText } from '../types/report';
-import type { Club, CreateClubDto, ClubRequest, ReviewClubRequestDto } from '../types/club';
+import type { Club, CreateClubDto, ClubRequest, ReviewClubRequestDto, ClubMembership } from '../types/club';
+import { MembershipAction } from '../types/club';
 import {
     Shield,
     Ban,
@@ -62,13 +63,13 @@ const AdminPanel: React.FC = () => {
 
     // URL-based section persistence
     const [searchParams, setSearchParams] = useSearchParams();
-    const initialSection = (searchParams.get('section') as 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports' | 'clubs' | 'club-requests') || 'dashboard';
+    const initialSection = (searchParams.get('section') as 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports' | 'clubs' | 'club-requests' | 'club-memberships') || 'dashboard';
 
     // Sidebar state
-    const [activeSection, setActiveSectionState] = useState<'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports' | 'clubs' | 'club-requests'>(initialSection);
+    const [activeSection, setActiveSectionState] = useState<'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports' | 'clubs' | 'club-requests' | 'club-memberships'>(initialSection);
 
     // Wrapper to update both state and URL
-    const setActiveSection = (section: 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports' | 'clubs' | 'club-requests') => {
+    const setActiveSection = (section: 'dashboard' | 'users' | 'user-detail' | 'ban' | 'mute' | 'thread' | 'logs' | 'reports' | 'clubs' | 'club-requests' | 'club-memberships') => {
         setActiveSectionState(section);
         setSearchParams({ section });
     };
@@ -235,6 +236,17 @@ const AdminPanel: React.FC = () => {
     });
     const [reviewRequestLoading, setReviewRequestLoading] = useState(false);
 
+    // Club Membership Applications state (admin)
+    const [clubMemberships, setClubMemberships] = useState<ClubMembership[]>([]);
+    const [clubMembershipsPage, setClubMembershipsPage] = useState(1);
+    const [clubMembershipsPageSize] = useState(20);
+    const [clubMembershipsTotalPages, setClubMembershipsTotalPages] = useState(0);
+    const [clubMembershipsTotalCount, setClubMembershipsTotalCount] = useState(0);
+    const [clubMembershipsLoading, setClubMembershipsLoading] = useState(false);
+    const [membershipActionModal, setMembershipActionModal] = useState<{ isOpen: boolean; membership: ClubMembership | null; action: 'approve' | 'reject' | null }>({ isOpen: false, membership: null, action: null });
+    const [membershipRejectionReason, setMembershipRejectionReason] = useState('');
+    const [membershipActionLoading, setMembershipActionLoading] = useState(false);
+
     // Sidebar state
     const [permissionsExpanded, setPermissionsExpanded] = useState(false);
     const [clubsExpanded, setClubsExpanded] = useState(false);
@@ -285,6 +297,13 @@ const AdminPanel: React.FC = () => {
             loadClubRequests();
         }
     }, [isAdminOrModerator, activeSection, clubRequestsPage]);
+
+    // Load club membership applications when section changes or page changes
+    useEffect(() => {
+        if (isAdminOrModerator && activeSection === 'club-memberships') {
+            loadClubMemberships();
+        }
+    }, [isAdminOrModerator, activeSection, clubMembershipsPage]);
 
     // Load user profile from URL on page refresh
     useEffect(() => {
@@ -1147,6 +1166,70 @@ const AdminPanel: React.FC = () => {
         }
     };
 
+    // ========== CLUB MEMBERSHIP APPLICATIONS MANAGEMENT FUNCTIONS ==========
+
+    // Load all pending club membership applications
+    const loadClubMemberships = async () => {
+        setClubMembershipsLoading(true);
+        try {
+            const response = await clubService.getPendingMemberships(clubMembershipsPage, clubMembershipsPageSize);
+            setClubMemberships(response.items);
+            setClubMembershipsTotalPages(response.totalPages);
+            setClubMembershipsTotalCount(response.totalCount);
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'Üyelik başvuruları yüklenemedi.');
+        } finally {
+            setClubMembershipsLoading(false);
+        }
+    };
+
+    // Open membership action modal
+    const openMembershipActionModal = (membership: ClubMembership, action: 'approve' | 'reject') => {
+        setMembershipActionModal({ isOpen: true, membership, action });
+        setMembershipRejectionReason('');
+    };
+
+    // Close membership action modal
+    const closeMembershipActionModal = () => {
+        setMembershipActionModal({ isOpen: false, membership: null, action: null });
+        setMembershipRejectionReason('');
+    };
+
+    // Handle membership action
+    const handleMembershipAction = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!membershipActionModal.membership || !membershipActionModal.action) return;
+
+        if (membershipActionModal.action === 'reject' && !membershipRejectionReason.trim()) {
+            toast.error('Eksik Bilgi', 'Red sebebi zorunludur.');
+            return;
+        }
+
+        setMembershipActionLoading(true);
+        try {
+            const action = membershipActionModal.action === 'approve' 
+                ? MembershipAction.Approve 
+                : MembershipAction.Reject;
+            
+            await clubService.performMembershipAction(
+                membershipActionModal.membership.membershipId,
+                action
+            );
+            
+            toast.success('Başarılı', membershipActionModal.action === 'approve' 
+                ? 'Üyelik başvurusu onaylandı!' 
+                : 'Üyelik başvurusu reddedildi.');
+            
+            closeMembershipActionModal();
+            loadClubMemberships();
+        } catch (error: any) {
+            toast.error('Hata', error.message || 'İşlem gerçekleştirilemedi.');
+        } finally {
+            setMembershipActionLoading(false);
+        }
+    };
+
     // Load user profile details
     const loadUserProfile = async (userId: number) => {
         setViewUserLoading(true);
@@ -1334,6 +1417,13 @@ const AdminPanel: React.FC = () => {
                                 >
                                     <Flag size={18} />
                                     <span>Kulüp Başvuruları</span>
+                                </button>
+                                <button
+                                    className={`sidebar-item sub-item ${activeSection === 'club-memberships' ? 'active' : ''}`}
+                                    onClick={() => setActiveSection('club-memberships')}
+                                >
+                                    <Users size={18} />
+                                    <span>Üyelik Başvuruları</span>
                                 </button>
                             </div>
                         )}
@@ -3867,7 +3957,232 @@ const AdminPanel: React.FC = () => {
                         </div>
                     </div>
                 )}
+
+                {/* Club Membership Applications Section */}
+                {activeSection === 'club-memberships' && (
+                    <div className="admin-section">
+                        <div className="section-header">
+                            <h1><Users size={28} /> Kulüp Üyelik Başvuruları</h1>
+                            <p>Bekleyen kulüp üyelik başvurularını inceleyin ve değerlendirin</p>
+                        </div>
+
+                        <div className="content-card">
+                            <div className="card-header">
+                                <Users size={20} />
+                                <h3>Bekleyen Üyelik Başvuruları</h3>
+                                <span className="badge">{clubMembershipsTotalCount} başvuru</span>
+                            </div>
+
+                            {clubMembershipsLoading ? (
+                                <div className="loading-state">Yükleniyor...</div>
+                            ) : clubMemberships.length === 0 ? (
+                                <div className="empty-state">
+                                    <Users size={48} />
+                                    <p>Bekleyen üyelik başvurusu bulunmuyor.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="user-table">
+                                        <table>
+                                            <thead>
+                                                <tr>
+                                                    <th>Kulüp</th>
+                                                    <th>Başvuran</th>
+                                                    <th>Not</th>
+                                                    <th>Tarih</th>
+                                                    <th>İşlemler</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {clubMemberships.map((membership) => (
+                                                    <tr key={membership.membershipId}>
+                                                        <td>
+                                                            <div className="user-cell">
+                                                                <Building2 size={16} style={{ color: 'var(--accent-color)' }} />
+                                                                <strong>{membership.clubName || 'Bilinmiyor'}</strong>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div className="user-cell">
+                                                                <div className="user-avatar" style={{ background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                                    {membership.username.charAt(0).toUpperCase()}
+                                                                </div>
+                                                                <span>@{membership.username}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div style={{ maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {membership.joinNote || '-'}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+                                                                {membership.joinedAt ? formatDate(membership.joinedAt) : '-'}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <div className="action-buttons">
+                                                                <button
+                                                                    className="btn-icon edit"
+                                                                    onClick={() => openMembershipActionModal(membership, 'approve')}
+                                                                    title="Onayla"
+                                                                    style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}
+                                                                >
+                                                                    <CheckCircle size={16} />
+                                                                </button>
+                                                                <button
+                                                                    className="btn-icon delete"
+                                                                    onClick={() => openMembershipActionModal(membership, 'reject')}
+                                                                    title="Reddet"
+                                                                >
+                                                                    <XCircle size={16} />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Pagination */}
+                                    {clubMembershipsTotalPages > 1 && (
+                                        <div className="pagination">
+                                            <button
+                                                onClick={() => {
+                                                    setClubMembershipsPage(clubMembershipsPage - 1);
+                                                }}
+                                                disabled={clubMembershipsPage <= 1 || clubMembershipsLoading}
+                                                className="btn-secondary"
+                                            >
+                                                <ChevronLeft size={16} /> Önceki
+                                            </button>
+                                            <span className="page-info">
+                                                Sayfa {clubMembershipsPage} / {clubMembershipsTotalPages}
+                                            </span>
+                                            <button
+                                                onClick={() => {
+                                                    setClubMembershipsPage(clubMembershipsPage + 1);
+                                                }}
+                                                disabled={clubMembershipsPage >= clubMembershipsTotalPages || clubMembershipsLoading}
+                                                className="btn-secondary"
+                                            >
+                                                Sonraki <ChevronRight size={16} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                )}
             </main >
+
+            {/* Membership Action Modal */}
+            <Modal
+                isOpen={membershipActionModal.isOpen}
+                onClose={closeMembershipActionModal}
+                title={membershipActionModal.action === 'approve' ? 'Üyelik Başvurusunu Onayla' : 'Üyelik Başvurusunu Reddet'}
+            >
+                <form onSubmit={handleMembershipAction} className="modal-form">
+                    {membershipActionModal.membership && (
+                        <>
+                            <div style={{ 
+                                background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%)',
+                                padding: '1rem',
+                                borderRadius: '8px',
+                                marginBottom: '1.5rem',
+                                border: '1px solid rgba(102, 126, 234, 0.2)'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                                    <Users size={16} style={{ color: '#667eea' }} />
+                                    <strong style={{ fontSize: '0.875rem', color: '#667eea' }}>Başvuru Detayları</strong>
+                                </div>
+                                <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.875rem' }}>
+                                    {membershipActionModal.membership.clubName && (
+                                        <div><strong>Kulüp:</strong> {membershipActionModal.membership.clubName}</div>
+                                    )}
+                                    <div><strong>Başvuran:</strong> @{membershipActionModal.membership.username}</div>
+                                    <div><strong>Not:</strong> {membershipActionModal.membership.joinNote || '-'}</div>
+                                    <div><strong>Tarih:</strong> {membershipActionModal.membership.joinedAt ? formatDate(membershipActionModal.membership.joinedAt) : '-'}</div>
+                                </div>
+                            </div>
+
+                            {membershipActionModal.action === 'reject' && (
+                                <div className="form-group">
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                                        <AlertTriangle size={16} style={{ color: '#ef4444' }} />
+                                        Red Sebebi *
+                                    </label>
+                                    <textarea
+                                        value={membershipRejectionReason}
+                                        onChange={(e) => setMembershipRejectionReason(e.target.value)}
+                                        placeholder="Başvurunun neden reddedildiğini açıklayın..."
+                                        rows={4}
+                                        required
+                                        style={{ fontSize: '1rem', padding: '0.75rem', resize: 'vertical' }}
+                                    />
+                                    <small style={{ display: 'block', marginTop: '0.25rem', color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                                        Red sebebi başvuran kullanıcıya gösterilecektir
+                                    </small>
+                                </div>
+                            )}
+
+                            {membershipActionModal.action === 'approve' && (
+                                <div style={{ 
+                                    background: 'rgba(16, 185, 129, 0.05)',
+                                    padding: '1rem',
+                                    borderRadius: '8px',
+                                    marginBottom: '1.5rem',
+                                    border: '1px solid rgba(16, 185, 129, 0.2)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem'
+                                }}>
+                                    <CheckCircle size={20} style={{ color: '#10b981' }} />
+                                    <span style={{ fontSize: '0.875rem', color: '#10b981' }}>
+                                        Bu işlem kullanıcıyı kulübe üye olarak ekleyecektir.
+                                    </span>
+                                </div>
+                            )}
+
+                            <div className="modal-actions">
+                                <button
+                                    type="button"
+                                    onClick={closeMembershipActionModal}
+                                    className="btn-secondary"
+                                    disabled={membershipActionLoading}
+                                >
+                                    İptal
+                                </button>
+                                <button
+                                    type="submit"
+                                    className={membershipActionModal.action === 'approve' ? 'btn-success' : 'btn-danger'}
+                                    disabled={membershipActionLoading}
+                                >
+                                    {membershipActionLoading ? (
+                                        'İşleniyor...'
+                                    ) : (
+                                        <>
+                                            {membershipActionModal.action === 'approve' ? (
+                                                <>
+                                                    <CheckCircle size={16} />
+                                                    Onayla
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <XCircle size={16} />
+                                                    Reddet
+                                                </>
+                                            )}
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </form>
+            </Modal>
 
             <Modal
                 isOpen={unbanModal.isOpen}
